@@ -59,4 +59,14 @@ public class GlobalExceptionHandler {
                 request.getRequestURL().toString()
         ));
     }
+    @ExceptionHandler(ConflitException.class)
+    public ResponseEntity<ApiError> handleConflitException(ConflitException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiError(
+                Instant.now(),
+                HttpStatus.CONFLICT.value(),
+                "Conflict",
+                ex.getMessage(),
+                request.getRequestURL().toString()
+        ));
+    }
 }

@@ -1,63 +1,318 @@
 version: "3.9"
 
+networks:
+  ticketwave-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  rabbitmq_data:
+    driver: local
+  localstack_data:
+    driver: local
+
 services:
-  app:
-    build:
-      context: ../app
-      dockerfile: ../app/Dockerfile
-    container_name: ticketwave-app
-    ports:
-      - "8080:8080"
-    depends_on:
-      - postgres
-      - redis
-      - localstack
-    environment:
-      SPRING_PROFILES_ACTIVE: docker
-      AWS_ENDPOINT_URL: http://localstack:4566
-      AWS_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
 
   postgres:
-    image: docker.io/postgres:17
+    image: docker.io/postgres:17-alpine
     container_name: ticketwave-postgres
     restart: unless-stopped
-
+    
     environment:
-      POSTGRES_DB: ticketwave
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-ticketwave}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C
 
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
+    
+    networks:
+      ticketwave-network:
+        ipv4_address: 172.20.0.2
+
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql:Z
 
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ticketwave}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========================================================================
+  # Redis Cache
+  # ========================================================================
   redis:
     image: docker.io/redis:7-alpine
     container_name: ticketwave-redis
     restart: unless-stopped
 
     ports:
-      - "6379:6379"
-  localstack:
-    image: docker.io/localstack/localstack:3.8
-    container_name: ticketwave-localstack
+      - "${REDIS_PORT:-6379}:6379"
+
+    networks:
+      ticketwave-network:
+        ipv4_address: 172.20.0.3
+
+    volumes:
+      - redis_data:/data
+
+    command: >
+      redis-server 
+      --appendonly yes 
+      --appendfsync everysec 
+      --maxmemory 256mb 
+      --maxmemory-policy allkeys-lru
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========================================================================
+  # RabbitMQ Message Broker
+  # ========================================================================
+  rabbitmq:
+    image: docker.io/rabbitmq:3.13-management-alpine
+    container_name: ticketwave-rabbitmq
+    restart: unless-stopped
+
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST:-/}
+      RABBITMQ_DISK_FREE_LIMIT: 50MB
 
     ports:
-      - "4566:4566"
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+
+    networks:
+      ticketwave-network:
+        ipv4_address: 172.20.0.4
+
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========================================================================
+  # LocalStack (AWS Services Mock)
+  # ========================================================================
+  localstack:
+    image: docker.io/localstack/localstack:4.5
+    container_name: ticketwave-localstack
+    restart: unless-stopped
 
     environment:
       SERVICES: s3,sqs,sns,ses,dynamodb,lambda,cloudwatch,secretsmanager
-      DEBUG: 1
-      AWS_DEFAULT_REGION: us-east-1
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
+      DEBUG: 0
+      AWS_DEFAULT_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+      DOCKER_HOST: unix:///var/run/docker.sock
+      LS_LOG: WARN
+      LAMBDA_EXECUTOR: docker-reuse
+
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+
+    networks:
+      ticketwave-network:
+        ipv4_address: 172.20.0.5
 
     volumes:
       - localstack_data:/var/lib/localstack
+      - ./localstack-init.sh:/etc/localstack/init/ready.d/init-aws.sh:ro
 
-volumes:
-  postgres_data:
-  localstack_data:
+    healthcheck:
+      test: ["CMD", "curl", "-f", "https://localhost:4566/_localstack/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+    deploy:
+      resources:
+        limits:
+          cpus: "1.5"
+          memory: 1G
+        reservations:
+          cpus: "1"
+          memory: 512M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ========================================================================
+  # TicketWave Spring Boot Application
+  # ========================================================================
+  app:
+    build:
+      context: ../app
+      dockerfile: Dockerfile
+      args:
+        JAVA_TOOL_OPTIONS: "-Xmx512m -Xms256m"
+
+    container_name: ticketwave-app
+    environment:
+      # Application
+      SPRING_APPLICATION_NAME: ${APP_NAME:-ticket-wave}
+      SPRING_PROFILES_ACTIVE: ${APP_PROFILE:-docker}
+      SERVER_PORT: ${APP_PORT:-8080}
+
+      # PostgreSQL
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-ticketwave}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${POSTGRES_POOL_SIZE:-10}
+      SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: 5
+      SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: 30000
+      SPRING_JPA_HIBERNATE_DDL_AUTO: ${SPRING_JPA_HIBERNATE_DDL_AUTO:-validate}
+      SPRING_FLYWAY_ENABLED: ${SPRING_FLYWAY_ENABLED:-true}
+      SPRING_FLYWAY_LOCATIONS: ${SPRING_FLYWAY_LOCATIONS:-classpath:/db/migration}
+
+      # Redis
+      SPRING_DATA_REDIS_HOST: ${REDIS_HOST:-redis}
+      SPRING_DATA_REDIS_PORT: ${REDIS_PORT:-6379}
+      SPRING_DATA_REDIS_DATABASE: ${REDIS_DB:-0}
+      SPRING_DATA_REDIS_TIMEOUT: 10000ms
+      SPRING_DATA_REDIS_JEDIS_POOL_MAX_ACTIVE: ${REDIS_POOL_SIZE:-8}
+      SPRING_DATA_REDIS_JEDIS_POOL_MAX_IDLE: 4
+      SPRING_DATA_REDIS_JEDIS_POOL_MIN_IDLE: 2
+
+      # RabbitMQ
+      SPRING_RABBITMQ_HOST: ${RABBITMQ_HOST:-rabbitmq}
+      SPRING_RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_USER:-guest}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-guest}
+      SPRING_RABBITMQ_VIRTUAL_HOST: ${RABBITMQ_VHOST:-/}
+      SPRING_RABBITMQ_CONNECTION_TIMEOUT: 10000
+
+      # AWS/LocalStack
+      AWS_ENDPOINT_URL: ${AWS_ENDPOINT_URL:-http://localstack:4566}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-test}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-test}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-ticketwave-bucket}
+
+      # Logging
+      LOGGING_LEVEL_ROOT: ${LOG_LEVEL:-INFO}
+      LOGGING_LEVEL_COM_PROJETO: ${LOG_APP_LEVEL:-DEBUG}
+      LOGGING_LEVEL_ORG_SPRINGFRAMEWORK: INFO
+
+      # Management/Actuator
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,info,metrics,prometheus
+      MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: always
+      MANAGEMENT_ENDPOINT_HEALTH_PROBES_ENABLED: true
+
+    ports:
+      - "${APP_PORT:-8080}:${APP_PORT:-8080}"
+
+    networks:
+      ticketwave-network:
+        ipv4_address: 172.20.0.10
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${APP_PORT:-8080}/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+        reservations:
+          cpus: "1"
+          memory: 512M
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+    restart: on-failure:3
+
+# ============================================================================
+# EOF - docker-compose.yml
+# ============================================================================

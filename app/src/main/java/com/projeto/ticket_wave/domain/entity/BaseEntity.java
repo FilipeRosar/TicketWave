@@ -1,9 +1,6 @@
 package com.projeto.ticket_wave.domain.entity;
 
-import jakarta.persistence.EntityListeners;
-import jakarta.persistence.Id;
-import jakarta.persistence.MappedSuperclass;
-import jakarta.persistence.Version;
+import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.Setter;
 import org.hibernate.annotations.UuidGenerator;
@@ -24,12 +21,15 @@ public class BaseEntity {
     private UUID id;
 
     @CreatedDate
+    @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdDate;
 
     @LastModifiedDate
-    private Instant lastModifiedDate;
+    @Column(name = "updated_at", nullable = false  )
+    private Instant updatedAt;
 
     @Version
+    @Column(nullable = false)
     private Long version;
 
 }
