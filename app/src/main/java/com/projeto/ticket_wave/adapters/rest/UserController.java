@@ -3,11 +3,14 @@ package com.projeto.ticket_wave.adapters.rest;
 import com.projeto.ticket_wave.application.dto.UserDTOs.RegisterUserRequest;
 import com.projeto.ticket_wave.application.dto.UserDTOs.UserResponse;
 import com.projeto.ticket_wave.application.dto.response.ApiResponse;
+import com.projeto.ticket_wave.application.mapper.UserMapper;
 import com.projeto.ticket_wave.application.service.UserService;
+import com.projeto.ticket_wave.infrastructure.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
@@ -18,6 +21,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class UserController {
     private final UserService userService;
+    private final UserMapper mapper;
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -34,5 +38,9 @@ public class UserController {
     @ResponseStatus(HttpStatus.OK)
     public UserResponse getUser(@PathVariable UUID userId) {
         return ResponseEntity.ok(userService.getUserById(userId)).getBody();
+    }
+    @GetMapping("/me")
+    public UserResponse getCurrentUser(@AuthenticationPrincipal CustomUserDetails userDetails) {
+        return mapper.toDto(userDetails.getUser());
     }
 }

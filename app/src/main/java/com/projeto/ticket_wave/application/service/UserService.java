@@ -31,6 +31,7 @@ public class UserService {
         user.setName(dto.name());
         user.setEmail(dto.email());
         user.setPassword(passwordEncoder.encode(dto.password()));
+        user.setPhone(dto.phone());
         user.setRole(Role.ROLE_CUSTOMER);
         user.setEnabled(true);
         user.setCreatedDate(Instant.now());

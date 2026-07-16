@@ -2,15 +2,13 @@ package com.projeto.ticket_wave.application.dto.UserDTOs;
 
 import com.projeto.ticket_wave.domain.enums.Role;
 
-import java.time.Instant;
 import java.util.UUID;
 
-public record UserResponse(
+public record MeResponse(
         UUID id,
         String name,
         String email,
-        String phone,
         Role role,
-        Instant createdAt
+        Boolean enabled
 ) {
 }
