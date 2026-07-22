@@ -1,4 +1,4 @@
-package com.projeto.ticket_wave.application.dto;
+package com.projeto.ticket_wave.application.dto.CategoryDTOs;
 
 import jakarta.validation.constraints.NotBlank;
 

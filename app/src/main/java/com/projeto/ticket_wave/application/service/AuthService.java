@@ -67,7 +67,7 @@ public class AuthService {
         refreshTokenRepository.delete(refreshToken);
     }
     public MeResponse me(){
-        User user = authenticationFacade.getCurrnetUser().getUser();
+        User user = authenticationFacade.getCurrentUser();
         return new MeResponse(
                 user.getId(),
                 user.getName(),

@@ -1,0 +1,5 @@
+ALTER TABLE venues
+ADD COLUMN slug VARCHAR(255);
+
+ALTER TABLE venues
+ADD CONSTRAINT uk_venues_slug UNIQUE (slug);

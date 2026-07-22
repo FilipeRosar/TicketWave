@@ -1,4 +1,4 @@
-CREATE TABLE event_images
+CREATE TABLE event_image
 (
     id UUID PRIMARY KEY,
 
@@ -24,5 +24,5 @@ CREATE TABLE event_images
             ON DELETE CASCADE
 );
 
-CREATE INDEX idx_event_images_event
-    ON event_images(event_id);
+CREATE INDEX idx_event_image_event
+    ON event_image(event_id);

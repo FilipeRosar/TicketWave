@@ -1,4 +1,15 @@
 package com.projeto.ticket_wave.repository;
 
-public class CategoryRepository {
+import com.projeto.ticket_wave.domain.entity.Category;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface CategoryRepository extends JpaRepository<Category, UUID> {
+    Optional<Category> findBySlug(String slug);
+    boolean existsBySlug(String slug);
+    boolean existsByNameIgnoreCase(String name);
 }
