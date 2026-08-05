@@ -79,4 +79,14 @@ public class GlobalExceptionHandler {
                 request.getRequestURL().toString()
         ));
     }
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<ApiError> handleStorageException(StorageException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(new ApiError(
+                Instant.now(),
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                "Storage error",
+                ex.getMessage(),
+                request.getRequestURL().toString()
+        ));
+    }
 }

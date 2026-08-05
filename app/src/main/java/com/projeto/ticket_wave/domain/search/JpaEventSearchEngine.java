@@ -41,4 +41,5 @@ public class JpaEventSearchEngine implements EventSearchEngine {
             default -> Sort.unsorted();
         };
     }
+}
 

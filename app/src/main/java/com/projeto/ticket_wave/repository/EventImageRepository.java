@@ -10,4 +10,5 @@ import java.util.UUID;
 @Repository
 public interface EventImageRepository extends JpaRepository<EventImage, UUID> {
     List<EventImage> findByEventId(UUID eventId);
+    List<EventImage> findByEventIdOrderByDisplayOrder(UUID eventId);
 }

@@ -1,6 +1,5 @@
-package com.projeto.ticket_wave.infrastructure.config;
+package com.projeto.ticket_wave.infrastructure.storage;
 
-import com.projeto.ticket_wave.infrastructure.storage.StorageProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
