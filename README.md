@@ -18,3 +18,13 @@ Para iniciar em segundo plano e aguardar as verificações de saúde, use `docke
 As configurações padrão funcionam sem arquivo `.env`. Para mudar as portas locais ou as credenciais de desenvolvimento, copie `.env.example` para `.env` e ajuste os valores. O usuário e o banco do PostgreSQL são definidos na primeira inicialização do volume.
 
 Para listar os buckets locais, execute `docker compose exec localstack awslocal s3 ls`. O nome do bucket e a região podem ser ajustados em `STORAGE_BUCKET` e `STORAGE_REGION`.
+
+## Integração contínua
+
+O GitHub Actions executa o job **Build e testes** em cada pull request. Para repetir a verificação localmente, use Java 21 e um Docker em execução para o Testcontainers.
+
+```sh
+./mvnw -B -ntp -f app/pom.xml verify
+```
+
+O bloqueio de merge depende da proteção da branch `main` no GitHub. Nessa regra, habilite **Require status checks to pass before merging** e selecione **Build e testes**, publicado pelo GitHub Actions.
