@@ -65,6 +65,10 @@ public class EventService {
         event.setEventStatus(EventStatus.DRAFT);
 
         event.setAvailableTickets(request.capacity());
+        event.setTotalViews(0);
+        event.setTotalTicketsSold(0);
+        event.setTotalFavorites(0);
+        event.validateDates();
 
         return eventMapper.toResponse(eventRepository.save(event));
     }
@@ -74,6 +78,7 @@ public class EventService {
         Event event = findEntity(id);
 
         eventMapper.updateEvent(request, event);
+        event.validateDates();
 
         if(request.categoryId() != null){
             Category category = categoryRepository.findById(request.categoryId())

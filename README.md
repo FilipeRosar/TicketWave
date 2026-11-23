@@ -39,6 +39,23 @@ docker compose down
 2. Use `POST /v1/api/auth/login` para obter o token de acesso e informe-o no botão **Authorize** do Swagger.
 3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A criação e a atualização exigem o papel de administrador ou organizador.
 
+### Erros da API
+
+As respostas de erro usam JSON. O campo `status` corresponde ao status HTTP, `path` identifica o caminho da requisição e `violations` contém os erros de validação por campo. A lista fica vazia quando não há erros de campo.
+
+```json
+{
+  "timestamp": "2026-11-23T12:00:00Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Dados de entrada inválidos.",
+  "path": "/v1/api/auth/login",
+  "violations": [
+    { "field": "email", "message": "deve ser um endereço de e-mail bem formado" }
+  ]
+}
+```
+
 ## Estrutura do repositório
 
 | Caminho | Conteúdo |

@@ -4,6 +4,7 @@ import com.projeto.ticket_wave.modules.identity.domain.entity.RefreshToken;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.application.port.RefreshTokenRepository;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.JwtProperties;
+import com.projeto.ticket_wave.shared.exception.UnauthorizedException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -39,14 +40,14 @@ public class RefreshTokenService {
     public RefreshToken validate(String token) {
 
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
-                .orElseThrow(() -> new RuntimeException("Refresh Token inválido"));
+                .orElseThrow(() -> new UnauthorizedException("Refresh Token inválido"));
 
         if (refreshToken.isRevoked()) {
-            throw new RuntimeException("Refresh Token revogado");
+            throw new UnauthorizedException("Refresh Token revogado");
         }
 
         if (refreshToken.getExpiresAt().isBefore(Instant.now())) {
-            throw new RuntimeException("Refresh Token expirado");
+            throw new UnauthorizedException("Refresh Token expirado");
         }
 
         return refreshToken;

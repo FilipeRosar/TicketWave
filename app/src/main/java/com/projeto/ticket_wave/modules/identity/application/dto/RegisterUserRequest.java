@@ -10,6 +10,7 @@ public record RegisterUserRequest(
         String name,
 
         @Email
+        @Size(max = 255)
         @NotBlank
         String email,
 
@@ -18,7 +19,7 @@ public record RegisterUserRequest(
         String password,
 
         @NotBlank
-        @Size(min = 8)
+        @Size(min = 8, max = 15)
         String phone
 ) {
 }

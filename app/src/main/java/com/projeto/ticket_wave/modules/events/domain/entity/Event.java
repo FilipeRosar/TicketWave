@@ -75,8 +75,8 @@ public class Event extends BaseEntity {
     private List<EventImage> images = new ArrayList<>();
 
     public void validateDates(){
-        if(endDate.isBefore(startDate)){
-            throw new BusinessException("End date cannot be before start date");
+        if (!endDate.isAfter(startDate)) {
+            throw new BusinessException("A data de término deve ser posterior à data de início.");
         }
     }
     public void validateCapacity(){
