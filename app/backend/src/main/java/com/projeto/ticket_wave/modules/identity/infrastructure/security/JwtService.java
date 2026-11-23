@@ -9,6 +9,7 @@ import io.jsonwebtoken.io.Decoders;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -24,6 +25,7 @@ public class JwtService {
         Date now = new Date();
         Date expiration = new Date(now.getTime() + jwtProperties.expiration());
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(userDetails.getUsername())
                 .claim("role", userDetails.getUser().getRole().name())
                 .issuedAt(now)

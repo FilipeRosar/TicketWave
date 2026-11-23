@@ -1,5 +1,6 @@
 package com.projeto.ticket_wave;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.projeto.ticket_wave.modules.identity.application.port.UserRepository;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
@@ -39,6 +40,54 @@ class ApiErrorTests {
 
     @Autowired
     private JwtService jwtService;
+
+    @Autowired
+    private ObjectMapper json;
+
+    @Test
+    void registersLogsInRotatesAndRevokesTokens() throws Exception {
+        String auth = "/v1/api/auth";
+        String protectedPath = "/users/me";
+        expectError(mvc.perform(get(protectedPath)), 401, protectedPath);
+        mvc.perform(post(auth + "/register").contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"name":"JWT Test","email":"jwt-flow@example.test","password":"test-password","phone":"11944445555"}
+                        """))
+                .andExpect(status().isOk());
+
+        String login = """
+                {"email":"jwt-flow@example.test","password":"test-password"}
+                """;
+        expectError(mvc.perform(post(auth + "/login").contentType(MediaType.APPLICATION_JSON)
+                .content(login.replace("test-password", "wrong-password"))), 401, auth + "/login");
+        String loginBody = mvc.perform(post(auth + "/login").contentType(MediaType.APPLICATION_JSON).content(login))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        var session = json.readTree(loginBody);
+        mvc.perform(get(protectedPath).header(HttpHeaders.AUTHORIZATION, "Bearer " + session.get("accessToken").asText()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("jwt-flow@example.test"));
+
+        String oldRefresh = json.createObjectNode().put("refreshToken", session.get("refreshToken").asText()).toString();
+        String refreshedBody = mvc.perform(post(auth + "/refresh")
+                .contentType(MediaType.APPLICATION_JSON).content(oldRefresh))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        var refreshed = json.readTree(refreshedBody);
+        mvc.perform(get(protectedPath).header(HttpHeaders.AUTHORIZATION, "Bearer " + refreshed.get("accessToken").asText()))
+                .andExpect(status().isOk());
+        expectError(mvc.perform(post(auth + "/refresh").contentType(MediaType.APPLICATION_JSON).content(oldRefresh)),
+                401, auth + "/refresh");
+
+        String currentRefresh = json.createObjectNode().put("refreshToken", refreshed.get("refreshToken").asText()).toString();
+        mvc.perform(post(auth + "/logout").contentType(MediaType.APPLICATION_JSON).content(currentRefresh))
+                .andExpect(status().isOk());
+        expectError(mvc.perform(post(auth + "/refresh").contentType(MediaType.APPLICATION_JSON).content(currentRefresh)),
+                401, auth + "/refresh");
+    }
 
     @Test
     void formatsValidationAndMalformedRequests() throws Exception {

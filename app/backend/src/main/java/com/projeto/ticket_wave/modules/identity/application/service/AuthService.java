@@ -10,8 +10,6 @@ import com.projeto.ticket_wave.modules.identity.application.dto.RegisterUserRequ
 import com.projeto.ticket_wave.modules.identity.application.dto.UserResponse;
 import com.projeto.ticket_wave.modules.identity.domain.entity.RefreshToken;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
-import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
-import com.projeto.ticket_wave.modules.identity.application.port.RefreshTokenRepository;
 import com.projeto.ticket_wave.modules.identity.application.port.CurrentUser;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.CustomUserDetails;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.JwtProperties;
@@ -30,16 +28,17 @@ public class AuthService {
     private final JwtProperties jwtProperties;
     private final UserService userService;
     private final RefreshTokenService refreshTokenService;
-    private final RefreshTokenRepository  refreshTokenRepository;
     private final CurrentUser currentUser;
 
+    @Transactional
     public LoginResponse login(LoginRequest loginRequest) {
         var authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(loginRequest.email(), loginRequest.password())
         );
         CustomUserDetails user = (CustomUserDetails) authentication.getPrincipal();
         String token = jwtService.generateToken(user);
-        return new LoginResponse(token, "Bearer", jwtProperties.expiration());
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user.getUser());
+        return new LoginResponse(token, refreshToken.getToken(), "Bearer", jwtProperties.expiration());
     }
     @Transactional
     public UserResponse register(RegisterUserRequest request) {
@@ -61,8 +60,7 @@ public class AuthService {
 
     }
     public void logout(RefreshTokenRequest request) {
-        RefreshToken refreshToken = refreshTokenService.validate(request.refreshToken());
-        refreshTokenRepository.delete(refreshToken);
+        refreshTokenService.revoke(request.refreshToken());
     }
     public MeResponse me(){
         User user = currentUser.getCurrentUser();

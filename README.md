@@ -36,8 +36,12 @@ docker compose down
 ## Usar a API
 
 1. No Swagger, use `POST /v1/api/auth/register` para cadastrar um usuário.
-2. Use `POST /v1/api/auth/login` para obter o token de acesso e informe-o no botão **Authorize** do Swagger.
+2. Use `POST /v1/api/auth/login` para obter `accessToken` e `refreshToken`. Informe o token de acesso no botão **Authorize** do Swagger ou envie `Authorization: Bearer <accessToken>` nas rotas protegidas.
 3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A criação e a atualização exigem o papel de administrador ou organizador.
+
+As rotas protegidas respondem com HTTP 401 quando não há um token de acesso válido. Envie `{"refreshToken":"..."}` para `POST /v1/api/auth/refresh` e substitua os dois tokens pelos valores retornados. Cada renovação invalida o refresh token enviado. Um novo login substitui a sessão de renovação anterior da conta.
+
+Para revogar a renovação, envie o refresh token atual para `POST /v1/api/auth/logout`. O JWT de acesso já emitido segue válido até expirar. O campo `expiresIn` é dado em milissegundos.
 
 ### Erros da API
 
