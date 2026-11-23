@@ -1,6 +1,7 @@
 package com.projeto.ticket_wave.infrastructure.storage;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
 import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
@@ -13,6 +14,7 @@ import java.net.URI;
 @EnableConfigurationProperties(StorageProperties.class)
 public class S3Config {
 
+    @Bean
     public S3Client s3Client(StorageProperties properties) {
         return S3Client.builder()
                 .endpointOverride(URI.create(properties.getEndpoint()))
