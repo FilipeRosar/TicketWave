@@ -1,6 +1,6 @@
 package com.projeto.ticket_wave;
 
-import com.projeto.ticket_wave.infrastructure.security.JwtProperties;
+import com.projeto.ticket_wave.modules.identity.infrastructure.security.JwtProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

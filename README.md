@@ -49,6 +49,10 @@ docker compose down
 | [`infra/`](infra/) | Inicialização do bucket S3 no LocalStack |
 | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) | Workflow de build e testes |
 
+O código Java está organizado em [`modules`](app/src/main/java/com/projeto/ticket_wave/modules) e [`shared`](app/src/main/java/com/projeto/ticket_wave/shared). Os módulos são `identity` para usuários e autenticação, `events` para eventos e catálogo, `ticketing` para lotes, pedidos e ingressos, e `networking` para conexões.
+
+Dentro de cada módulo, `domain` contém os modelos, `application` reúne os casos de uso e suas interfaces, `adapters/rest` recebe as chamadas HTTP e `infrastructure` implementa integrações como a persistência JPA. Componentes reutilizados entre módulos ficam em `shared`.
+
 ## Build e testes
 
 Com Java 21 e o Docker em execução, rode o Maven Wrapper na raiz do repositório.
