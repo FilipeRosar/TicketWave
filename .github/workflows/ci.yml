@@ -23,7 +23,7 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-          cache-dependency-path: app/pom.xml
+          cache-dependency-path: app/backend/pom.xml
 
       - name: Compilar e testar com Maven
-        run: ./mvnw -B -ntp -f app/pom.xml verify
+        run: ./mvnw -B -ntp -f app/backend/pom.xml verify
