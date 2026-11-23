@@ -14,6 +14,7 @@ import java.util.List;
         unmappedTargetPolicy = ReportingPolicy.IGNORE
 )
 public interface EventMapper {
+    @BeanMapping(nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     Event toEntity(CreateEventRequest dto);
     @Mapping(target = "category", source = "category.name")
     @Mapping(target = "venue", source = "venue.name")

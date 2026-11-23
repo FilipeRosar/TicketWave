@@ -22,7 +22,7 @@ public class JwtService {
     }
     public String generateToken(CustomUserDetails userDetails){
         Date now = new Date();
-        Date expiration = new Date(now.getTime() + jwtProperties.expiration() * 1000);
+        Date expiration = new Date(now.getTime() + jwtProperties.expiration());
         return Jwts.builder()
                 .subject(userDetails.getUsername())
                 .claim("role", userDetails.getUser().getRole().name())
@@ -35,12 +35,9 @@ public class JwtService {
         return extractClaims(token).getSubject();
     }
     public boolean isTokenValid(String token, String email){
-        return extractClaims(token).equals(email) && !isTokenExpired(token);
+        return email.equals(extractClaims(token).getSubject());
     }
 
-    private boolean isTokenExpired(String token){
-        return extractExpiration(token).before(new Date());
-    }
     public Date extractExpiration(String token){
         return extractClaims(token).getExpiration();
     }

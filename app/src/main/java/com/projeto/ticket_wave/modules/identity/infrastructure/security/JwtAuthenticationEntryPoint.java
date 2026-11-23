@@ -13,7 +13,6 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.time.Instant;
 
 
 @Component
@@ -25,13 +24,8 @@ public class JwtAuthenticationEntryPoint implements AuthenticationEntryPoint {
     public void commence(HttpServletRequest request, HttpServletResponse response, AuthenticationException authException) throws IOException, ServletException {
         String message = (String) request.getAttribute("jwt_error");
 
-        ApiError error = new ApiError(
-                Instant.now(),
-                HttpStatus.UNAUTHORIZED.value(),
-                "Unauthorized",
-                message != null ? message : "Usuário não autenticado.",
-                request.getRequestURI()
-        );
+        ApiError error = ApiError.of(HttpStatus.UNAUTHORIZED,
+                message != null ? message : "Usuário não autenticado.", request.getRequestURI());
 
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
