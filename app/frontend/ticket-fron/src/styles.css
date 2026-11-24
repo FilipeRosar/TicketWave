@@ -1,9 +1,19 @@
 @import 'tailwindcss';
 
 :root {
-  font-family: 'Inter', Arial, sans-serif;
-  color: #17182b;
-  background: #faf9f6;
+  --wave-blue: #0511f2;
+  --wave-navy: #030a8c;
+  --wave-steel: #295fa6;
+  --wave-teal: #2abfbf;
+  --wave-ink: #0d0d0d;
+  --wave-muted: #46546a;
+  --wave-line: #dce5f3;
+  --wave-mist: #eff5fc;
+  --wave-surface: #fff;
+
+  font-family: 'Inter', system-ui, sans-serif;
+  color: var(--wave-ink);
+  background: #f5f8fd;
   font-synthesis: none;
 }
 
@@ -11,5 +21,5 @@
 body { margin: 0; }
 button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
-:focus-visible { outline: 3px solid #6b59fa; outline-offset: 4px; }
+:focus-visible { outline: 3px solid var(--wave-steel); outline-offset: 4px; }
 a { color: inherit; text-decoration: none; }

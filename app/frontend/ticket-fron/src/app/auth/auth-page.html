@@ -1,0 +1,74 @@
+<main class="auth-layout">
+  <aside class="brand-side" aria-label="TicketWave">
+    <a routerLink="/" class="brand" aria-label="TicketWave, início">
+      <img src="assets/home/mark.png" alt="" width="37" height="37">
+      <span>Ticket<span>Wave</span></span>
+    </a>
+    <p class="brand-line">A vida acontece <strong>ao vivo.</strong></p>
+  </aside>
+
+  <section class="form-side" aria-labelledby="auth-title">
+    <header class="form-nav">
+      <a routerLink="/" class="back-link">Voltar à home</a>
+      @if (!showingAccount) {
+        <a class="alternate" [routerLink]="registering ? '/entrar' : '/cadastro'">
+          {{ registering ? 'Já tenho conta' : 'Criar conta' }}
+        </a>
+      }
+    </header>
+
+    <div class="form-content">
+      @if (showingAccount) {
+        <h1 id="auth-title">Minha conta</h1>
+        @if (session.user(); as user) {
+          <dl class="profile">
+            <dt>Nome</dt>
+            <dd>{{ user.name }}</dd>
+            <dt>E-mail</dt>
+            <dd>{{ user.email }}</dd>
+          </dl>
+          <button class="primary" type="button" [disabled]="busy()" (click)="logout()">
+            {{ busy() ? 'Saindo…' : 'Sair da conta' }}
+          </button>
+        } @else {
+          <p class="notice" role="status">{{ session.sessionNotice() || 'Entre para acessar sua conta.' }}</p>
+          <a class="primary" routerLink="/entrar">Entrar</a>
+        }
+      } @else {
+        <h1 id="auth-title">{{ registering ? 'Crie sua conta.' : 'Entre na sua conta.' }}</h1>
+        <p class="intro">{{ registering ? 'Cadastre seus dados para começar.' : 'Acesse seu perfil na TicketWave.' }}</p>
+        @if (registered) {
+          <p role="status" class="notice">Conta criada. Entre com sua senha.</p>
+        } @else if (session.sessionNotice()) {
+          <p role="status" class="notice">{{ session.sessionNotice() }}</p>
+        }
+
+        <form #credentials (submit)="submit($event, credentials)">
+          @if (registering) {
+            <label for="name">Nome</label>
+            <input id="name" name="name" autocomplete="name" required maxlength="150" placeholder="Seu nome">
+            <label for="phone">Telefone</label>
+            <input id="phone" name="phone" type="tel" autocomplete="tel" required minlength="8" maxlength="15" placeholder="Seu telefone com DDD">
+          }
+          <label for="email">E-mail</label>
+          <input id="email" name="email" type="email" autocomplete="username" required maxlength="255"
+            [value]="email" placeholder="voce@exemplo.com">
+          <label for="password">Senha</label>
+          <div class="password">
+            <input id="password" name="password" [type]="passwordVisible() ? 'text' : 'password'" required
+              [attr.autocomplete]="registering ? 'new-password' : 'current-password'"
+              [attr.minlength]="registering ? 8 : null" [attr.maxlength]="registering ? 20 : null">
+            <button class="visibility" type="button" aria-controls="password" (click)="passwordVisible.set(!passwordVisible())">
+              {{ passwordVisible() ? 'Ocultar' : 'Mostrar' }}
+            </button>
+          </div>
+          @if (registering) { <p class="hint">Use de 8 a 20 caracteres.</p> }
+          <button class="primary" type="submit" [disabled]="busy()">
+            {{ busy() ? 'Aguarde…' : registering ? 'Criar minha conta' : 'Entrar' }}
+          </button>
+        </form>
+      }
+      @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+    </div>
+  </section>
+</main>
