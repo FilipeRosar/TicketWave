@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -28,6 +30,12 @@ public class UserJpaEntity extends JpaBaseEntity {
 
     @Column(nullable = false, unique = true)
     private String phone;
+
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
+    @Column(length = 11, unique = true)
+    private String cpf;
 
     @Column(nullable = false)
     private Boolean enabled = true;

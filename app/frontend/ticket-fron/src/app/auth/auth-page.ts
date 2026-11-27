@@ -28,6 +28,12 @@ export class AuthPage {
     const data = new FormData(form);
     const email = String(data.get('email')).trim();
     const password = String(data.get('password'));
+    const passwordConfirmation = String(data.get('passwordConfirmation') ?? '');
+    if (this.registering && password !== passwordConfirmation) {
+      this.error.set('As senhas devem ser iguais.');
+      return;
+    }
+
     this.busy.set(true);
     this.error.set('');
 
@@ -37,7 +43,10 @@ export class AuthPage {
           name: String(data.get('name')).trim(),
           email,
           phone: String(data.get('phone')).trim(),
+          birthDate: String(data.get('birthDate')),
+          cpf: String(data.get('cpf')).trim(),
           password,
+          passwordConfirmation,
         });
         await this.router.navigate(['/entrar'], { state: { email, registered: true } });
       } else {
@@ -70,7 +79,8 @@ export class AuthPage {
   }
 
   private showError(error: unknown): void {
-    const message = error instanceof HttpErrorResponse ? error.error?.message : undefined;
+    const response = error instanceof HttpErrorResponse ? error.error : undefined;
+    const message = response?.violations?.[0]?.message ?? response?.message;
     this.error.set(typeof message === 'string' ? message : 'Não foi possível concluir. Tente novamente.');
   }
 }

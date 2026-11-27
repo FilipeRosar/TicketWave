@@ -1,8 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthSession } from '../auth/auth-session';
+import type { CatalogEvent } from '../interfaces/catalog-event';
 
-const events = [
+const events: readonly CatalogEvent[] = [
   {
     title: 'Sunset Sessions',
     category: 'Música',
@@ -30,9 +31,7 @@ const events = [
     image: 'assets/home/photo-3.webp',
     description: 'Um espetáculo de dança contemporânea que explora ritmo, luz e movimento.',
   },
-] as const;
-
-type CatalogEvent = (typeof events)[number];
+];
 
 function normalize(text: string): string {
   return text.normalize('NFD').replace(/\p{M}/gu, '').toLocaleLowerCase('pt-BR');

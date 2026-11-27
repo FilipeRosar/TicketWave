@@ -27,12 +27,28 @@ describe('Navegação do TicketWave', () => {
   it('após cadastro volta ao login com o e-mail preenchido', async () => {
     const harness = await RouterTestingHarness.create('/cadastro');
     const form = harness.routeNativeElement!.querySelector('form')!;
-    const fields = { name: 'Pessoa Teste', phone: '11912345678', email: 'teste@example.test', password: 'senha-teste' };
+    const fields = {
+      name: 'Pessoa Teste',
+      phone: '11912345678',
+      email: 'teste@example.test',
+      birthDate: '1995-04-20',
+      cpf: '529.982.247-25',
+      password: 'senha-teste',
+      passwordConfirmation: 'senha-teste',
+    };
     for (const [name, value] of Object.entries(fields)) {
       (form.elements.namedItem(name) as HTMLInputElement).value = value;
     }
-    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     const http = TestBed.inject(HttpTestingController);
+    const confirmation = form.elements.namedItem('passwordConfirmation') as HTMLInputElement;
+    confirmation.value = 'outra-senha';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    http.expectNone('/v1/api/auth/register');
+    harness.detectChanges();
+    expect(harness.routeNativeElement?.querySelector('[role="alert"]')?.textContent).toContain('As senhas devem ser iguais.');
+
+    confirmation.value = fields.passwordConfirmation;
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     const request = http.expectOne('/v1/api/auth/register');
     expect(request.request.body).toEqual(fields);
     request.flush(null);

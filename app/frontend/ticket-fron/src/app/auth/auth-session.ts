@@ -1,30 +1,11 @@
-import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
-
-interface Tokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-}
-
-interface Profile {
-  name: string;
-  email: string;
-}
-
-export interface Registration {
-  name: string;
-  email: string;
-  phone: string;
-  password: string;
-}
-
-const api = '/v1/api/auth';
+import { AuthApi } from '../api/auth-api';
+import type { Profile, Registration, Tokens } from '../interfaces/auth';
 
 @Injectable({ providedIn: 'root' })
 export class AuthSession {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(AuthApi);
   private readonly profile = signal<Profile | null>(null);
   private readonly notice = signal('');
   private tokens?: Tokens;
@@ -38,15 +19,13 @@ export class AuthSession {
     inject(DestroyRef).onDestroy(() => clearTimeout(this.timer));
   }
 
-  async register(details: Registration): Promise<void> {
-    await firstValueFrom(this.http.post<void>(api + '/register', details));
+  register(details: Registration): Promise<void> {
+    return this.api.register(details);
   }
 
   async login(email: string, password: string): Promise<void> {
-    const tokens = await firstValueFrom(this.http.post<Tokens>(api + '/login', { email, password }));
-    const profile = await firstValueFrom(this.http.get<Profile>(api + '/me', {
-      headers: { Authorization: 'Bearer ' + tokens.accessToken },
-    }));
+    const tokens = await this.api.login(email, password);
+    const profile = await this.api.getProfile(tokens.accessToken);
     this.profile.set(profile);
     this.notice.set('');
     this.setTokens(tokens);
@@ -59,7 +38,7 @@ export class AuthSession {
     if (!this.tokens) return;
 
     try {
-      await firstValueFrom(this.http.post<void>(api + '/logout', { refreshToken: this.tokens.refreshToken }));
+      await this.api.logout(this.tokens.refreshToken);
     } catch (error) {
       if (!(error instanceof HttpErrorResponse) || error.status !== 401) {
         this.setTokens(this.tokens);
@@ -80,9 +59,7 @@ export class AuthSession {
 
   private async renew(tokens: Tokens): Promise<void> {
     try {
-      const refreshed = await firstValueFrom(this.http.post<Tokens>(api + '/refresh', {
-        refreshToken: tokens.refreshToken,
-      }));
+      const refreshed = await this.api.refresh(tokens.refreshToken);
       this.setTokens(refreshed);
     } catch {
       this.clear();

@@ -19,7 +19,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -53,9 +56,14 @@ class ApiErrorTests {
                 401, protectedPath).andExpect(jsonPath("$.message").value("Token inválido"));
         mvc.perform(post(auth + "/register").contentType(MediaType.APPLICATION_JSON)
                 .content("""
-                        {"name":"JWT Test","email":"jwt-flow@example.test","password":"test-password","phone":"11944445555"}
+                        {"name":"JWT Test","email":"jwt-flow@example.test","password":"test-password","phone":"11944445555",
+                         "birthDate":"1995-04-20","cpf":"529.982.247-25","passwordConfirmation":"test-password"}
                         """))
                 .andExpect(status().isOk());
+
+        User registered = users.findByEmail("jwt-flow@example.test").orElseThrow();
+        assertThat(registered.getBirthDate()).isEqualTo(LocalDate.of(1995, 4, 20));
+        assertThat(registered.getCpf()).isEqualTo("52998224725");
 
         String login = """
                 {"email":"jwt-flow@example.test","password":"test-password"}
@@ -95,7 +103,7 @@ class ApiErrorTests {
     void formatsValidationAndMalformedRequests() throws Exception {
         String path = "/v1/api/auth/register";
         expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{}")), 400, path)
-                .andExpect(jsonPath("$.violations.length()").value(4));
+                .andExpect(jsonPath("$.violations.length()").value(7));
         expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{")), 400, path)
                 .andExpect(jsonPath("$.violations").isEmpty());
         expectError(mvc.perform(post(path).contentType(MediaType.TEXT_PLAIN).content("{}")), 415, path);
@@ -115,13 +123,27 @@ class ApiErrorTests {
     void formatsDuplicateRegistration() throws Exception {
         String path = "/v1/api/auth/register";
         String registration = """
-                {"name":"Nova conta","email":"duplicate@example.test","password":"test-password","phone":"11933334444"}
+                {"name":"Nova conta","email":"duplicate@example.test","password":"test-password","phone":"11933334444",
+                 "birthDate":"1995-04-20","cpf":"111.444.777-35","passwordConfirmation":"test-password"}
                 """;
+        expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(registration.replace("111.444.777-35", "111.111.111-11"))), 400, path)
+                .andExpect(jsonPath("$.violations[0].field").value("cpf"));
+        expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(registration.replace("1995-04-20", "2099-01-01"))), 400, path)
+                .andExpect(jsonPath("$.violations[0].field").value("birthDate"));
+        expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(registration.replace("\"passwordConfirmation\":\"test-password\"", "\"passwordConfirmation\":\"wrong-password\""))),
+                400, path).andExpect(jsonPath("$.violations[0].message").value("As senhas devem ser iguais."));
         mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(registration))
                 .andExpect(status().isOk());
         expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(registration)), 409, path);
         expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
-                .content(registration.replace("duplicate@example.test", "another@example.test"))), 409, path);
+                .content(registration.replace("duplicate@example.test", "another@example.test")
+                        .replace("111.444.777-35", "12345678909"))), 409, path);
+        expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(registration.replace("duplicate@example.test", "another@example.test")
+                        .replace("11933334444", "11933336666").replace("111.444.777-35", "11144477735"))), 409, path);
     }
 
     @Test

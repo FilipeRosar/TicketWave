@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -19,6 +21,10 @@ public class User extends BaseEntity {
     private Role role;
 
     private String phone;
+
+    private LocalDate birthDate;
+
+    private String cpf;
 
     private Boolean enabled = true;
 }

@@ -41,7 +41,7 @@ docker compose down
 
 ## Usar a API
 
-1. No Swagger, use `POST /v1/api/auth/register` para cadastrar um usuário.
+1. No Swagger, use `POST /v1/api/auth/register` para cadastrar um usuário. Informe nome, e-mail, telefone, data de nascimento (`birthDate`, no formato `AAAA-MM-DD`), CPF (`cpf`), senha e confirmação (`passwordConfirmation`). O CPF aceita 11 dígitos ou o formato com pontos e hífen.
 2. Use `POST /v1/api/auth/login` para obter `accessToken` e `refreshToken`. Informe o token de acesso no botão **Authorize** do Swagger ou envie `Authorization: Bearer <accessToken>` nas rotas protegidas.
 3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A criação e a atualização exigem o papel de administrador ou organizador.
 
