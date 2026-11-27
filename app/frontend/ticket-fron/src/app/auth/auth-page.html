@@ -1,0 +1,102 @@
+<main class="auth-layout">
+  <aside class="brand-side" aria-label="TicketWave">
+    <a routerLink="/" class="brand" aria-label="TicketWave, início">
+      <img src="assets/home/mark.png" alt="" width="37" height="37">
+      <span>Ticket<span>Wave</span></span>
+    </a>
+    <p class="brand-line">A vida acontece <strong>ao vivo.</strong></p>
+  </aside>
+
+  <section class="form-side" aria-labelledby="auth-title">
+    <header class="form-nav">
+      <a routerLink="/" class="back-link">Voltar à home</a>
+      <a class="alternate" [routerLink]="registering ? '/entrar' : '/cadastro'">
+        {{ registering ? 'Já tenho conta' : 'Criar conta' }}
+      </a>
+    </header>
+
+    <div class="form-content">
+      <h1 id="auth-title">{{ registering ? 'Crie sua conta.' : 'Entre na sua conta.' }}</h1>
+      <p class="intro">{{ registering ? 'Cadastre seus dados para começar.' : 'Acesse seu perfil na TicketWave.' }}</p>
+      @if (passwordReset) {
+        <p role="status" class="notice">Senha atualizada. Entre com a nova senha.</p>
+      } @else if (registered) {
+        <p role="status" class="notice">Conta criada. Entre com sua senha.</p>
+      } @else if (session.sessionNotice()) {
+        <p role="status" class="notice">{{ session.sessionNotice() }}</p>
+      }
+
+      <form #credentials (submit)="submit($event, credentials)">
+        @if (registering) {
+          <label for="name">Nome</label>
+          <input id="name" name="name" autocomplete="name" required maxlength="150" placeholder="Seu nome">
+          <label for="birthDate">Data de nascimento</label>
+          <input id="birthDate" name="birthDate" type="date" autocomplete="bday" required>
+          <label for="cpf">CPF</label>
+          <input id="cpf" name="cpf" inputmode="numeric" required maxlength="14" placeholder="000.000.000-00">
+          <label for="phone">Telefone</label>
+          <input id="phone" name="phone" type="tel" autocomplete="tel" required minlength="8" maxlength="15" placeholder="Seu telefone com DDD">
+        }
+        <label for="email">E-mail</label>
+        <input id="email" name="email" type="email" autocomplete="username" required maxlength="255"
+          [value]="email" placeholder="voce@exemplo.com">
+        <label for="password">Senha</label>
+        <div class="password">
+          <input id="password" name="password" [type]="passwordVisible() ? 'text' : 'password'" required
+            [attr.autocomplete]="registering ? 'new-password' : 'current-password'"
+            [attr.minlength]="registering ? 8 : null" [attr.maxlength]="registering ? 20 : null">
+          <button class="visibility" type="button" aria-controls="password" (click)="passwordVisible.set(!passwordVisible())">
+            {{ passwordVisible() ? 'Ocultar' : 'Mostrar' }}
+          </button>
+        </div>
+        @if (registering) {
+          <p class="hint">Use de 8 a 20 caracteres.</p>
+          <label for="passwordConfirmation">Confirmação de senha</label>
+          <input id="passwordConfirmation" name="passwordConfirmation" type="password"
+            autocomplete="new-password" required minlength="8" maxlength="20">
+        }
+        @if (registering) {
+          <fieldset class="address-fields">
+            <legend>Endereço</legend>
+            <label for="zipCode">CEP</label>
+            <div class="zip-code">
+              <input #zipCode id="zipCode" name="zipCode" inputmode="numeric" autocomplete="postal-code"
+                placeholder="00000-000" required maxlength="9" pattern="[0-9]{5}-?[0-9]{3}"
+                aria-describedby="zip-code-status" (input)="zipCodeStatus.set('')">
+              <button class="alternate" type="button" [disabled]="lookingUpZipCode() || busy()"
+                (click)="lookupZipCode(credentials, zipCode)">Buscar CEP</button>
+            </div>
+            <p class="hint" id="zip-code-status" role="status">{{ zipCodeStatus() }}</p>
+
+            <label for="street">Logradouro</label>
+            <input id="street" name="street" autocomplete="address-line1" required maxlength="255">
+
+            <label for="number">Número</label>
+            <input id="number" name="number" placeholder="Número ou S/N" required maxlength="20">
+
+            <label for="complement">Complemento (opcional)</label>
+            <input id="complement" name="complement" autocomplete="address-line2" maxlength="150">
+
+            <label for="district">Bairro</label>
+            <input id="district" name="district" autocomplete="address-level3" required maxlength="150">
+
+            <label for="city">Cidade</label>
+            <input id="city" name="city" autocomplete="address-level2" required maxlength="120">
+
+            <label for="state">UF</label>
+            <input id="state" name="state" autocomplete="address-level1" autocapitalize="characters"
+              required maxlength="2" pattern="[A-Za-z]{2}">
+          </fieldset>
+        }
+        @if (!registering) {
+          <a class="back-link" routerLink="/esqueci-minha-senha">Esqueci minha senha</a>
+        }
+        <button class="primary" type="submit" [disabled]="busy() || lookingUpZipCode()">
+          {{ busy() ? 'Aguarde…' : registering ? 'Criar minha conta' : 'Entrar' }}
+        </button>
+      </form>
+      <app-google-sign-in [(working)]="busy" />
+      @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+    </div>
+  </section>
+</main>

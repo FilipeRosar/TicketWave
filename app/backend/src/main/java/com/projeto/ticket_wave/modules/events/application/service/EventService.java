@@ -15,6 +15,7 @@ import com.projeto.ticket_wave.modules.events.application.port.EventRepository;
 import com.projeto.ticket_wave.modules.events.application.port.VenueRepository;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.application.port.CurrentUser;
+import com.projeto.ticket_wave.shared.exception.ForbiddenException;
 import com.projeto.ticket_wave.shared.exception.NotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -75,7 +76,7 @@ public class EventService {
 
     @Transactional
     public EventResponse updateEvent(UUID id, UpdateEventRequest request){
-        Event event = findEntity(id);
+        Event event = findOwnedEvent(id);
 
         eventMapper.updateEvent(request, event);
         event.validateDates();
@@ -110,13 +111,20 @@ public class EventService {
 
     @Transactional
     public void deleteEvent(UUID id){
-        Event event = findEntity(id);
-        eventRepository.delete(event);
+        eventRepository.delete(findOwnedEvent(id));
     }
 
     public Page<EventSummaryResponse> search(EventSearchCriteria search, Pageable pageable){
         return eventRepository.search(search, pageable)
                 .map(eventMapper::toSummary);
+    }
+
+    private Event findOwnedEvent(UUID id) {
+        Event event = findEntity(id);
+        if (!event.getOrganizer().getId().equals(currentUser.getCurrentUser().getId())) {
+            throw new ForbiddenException("Somente o organizador responsável pode gerenciar este evento.");
+        }
+        return event;
     }
 
     private Event findEntity(UUID id){

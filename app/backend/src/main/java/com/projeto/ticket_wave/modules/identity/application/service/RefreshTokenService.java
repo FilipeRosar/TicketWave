@@ -22,8 +22,12 @@ public class RefreshTokenService {
 
     public RefreshToken createRefreshToken(User user) {
 
+        refreshTokenRepository.lockUserSession(user.getId());
         refreshTokenRepository.deleteByUser(user);
+        return issue(user);
+    }
 
+    private RefreshToken issue(User user) {
         RefreshToken refreshToken = RefreshToken.builder()
                 .token(UUID.randomUUID().toString())
                 .expiresAt(
@@ -37,7 +41,7 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(refreshToken);
     }
 
-    public RefreshToken validate(String token) {
+    private RefreshToken validate(String token) {
 
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
                 .orElseThrow(() -> new UnauthorizedException("Refresh Token inválido"));
@@ -46,20 +50,30 @@ public class RefreshTokenService {
             throw new UnauthorizedException("Refresh Token revogado");
         }
 
-        if (refreshToken.getExpiresAt().isBefore(Instant.now())) {
+        if (!refreshToken.getExpiresAt().isAfter(Instant.now())) {
             throw new UnauthorizedException("Refresh Token expirado");
+        }
+
+        if (!Boolean.TRUE.equals(refreshToken.getUser().getEnabled())) {
+            throw new UnauthorizedException("Usuário indisponível");
         }
 
         return refreshToken;
     }
 
     public RefreshToken rotate(String token) {
-        RefreshToken current = validate(token);
-        current.setRevoked(true);
-        refreshTokenRepository.save(current);
-        return createRefreshToken(current.getUser());
+        RefreshToken current = lockAndValidate(token);
+        refreshTokenRepository.delete(current);
+        return issue(current.getUser());
     }
-    public void revoke(User user) {
-        refreshTokenRepository.deleteByUser(user);
+
+    public void revoke(String token) {
+        refreshTokenRepository.delete(lockAndValidate(token));
+    }
+
+    private RefreshToken lockAndValidate(String token) {
+        RefreshToken current = validate(token);
+        refreshTokenRepository.lockUserSession(current.getUser().getId());
+        return validate(token);
     }
 }

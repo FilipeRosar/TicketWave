@@ -1,0 +1,24 @@
+:host-context([data-theme='dark']) {
+  --line: var(--wave-line);
+  --muted: var(--wave-muted);
+  --accent: var(--wave-blue);
+}
+:host-context([data-theme='dark']) :is(.panel, .feedback, .secondary) {
+  background: var(--wave-surface);
+  border-color: var(--line);
+  color: var(--wave-ink);
+}
+:host-context([data-theme='dark']) .cover-action { color: #182b54; }
+:host-context([data-theme='dark']) :is(.photo-picker, .fields input, .preferences > input, textarea, .suggestion-empty) {
+  background: var(--dark-field); color: var(--wave-ink); border-color: var(--line);
+}
+:host-context([data-theme='dark']) :is(.avatar, .tag),
+:host-context([data-theme='dark']) .goal:has(input:checked),
+:host-context([data-theme='dark']) .secondary:hover {
+  background: #26395d; color: var(--dark-link);
+}
+:host-context([data-theme='dark']) :is(.goal-tag, .network-icon, .success) {
+  background: #163a3c; color: #a3f3e3;
+}
+:host-context([data-theme='dark']) :is(.error, .danger, .delete-link) { color: var(--dark-danger); }
+:host-context([data-theme='dark']) :is(.error, .delete-confirm, .danger:hover) { background: #392235; }

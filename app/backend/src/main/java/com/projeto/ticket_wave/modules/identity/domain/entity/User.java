@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDate;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -14,11 +16,19 @@ public class User extends BaseEntity {
 
     private String email;
 
+    private String googleSubject;
+
     private String password;
 
     private Role role;
 
     private String phone;
+
+    private LocalDate birthDate;
+
+    private String cpf;
+
+    private RegistrationAddress registrationAddress;
 
     private Boolean enabled = true;
 }

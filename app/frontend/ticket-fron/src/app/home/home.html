@@ -1,0 +1,164 @@
+<header class="site-header" id="inicio">
+  <div class="shell header-content">
+    <a class="brand" href="#inicio" aria-label="TicketWave, início">
+      <img src="assets/home/mark.png" alt="" width="36" height="36">
+      <span>Ticket<span>Wave</span></span>
+    </a>
+    <nav aria-label="Navegação principal">
+      <a href="#eventos">Eventos</a>
+      <a href="#sobre">Sobre</a>
+      <a href="#duvidas">Dúvidas</a>
+    </nav>
+    <div class="header-actions">
+      @if (session.user()) { <app-theme-toggle /> }
+      <a class="button button-outline" [routerLink]="session.user() ? '/conta' : '/entrar'">
+        {{ session.user() ? 'Minha conta' : 'Entrar' }}
+      </a>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="hero-copy shell">
+      <h1 id="hero-title">O melhor acontece <em>ao vivo.</em></h1>
+      <p>Descubra shows, encontros e experiências para viver na sua cidade.</p>
+      <a class="button" href="#busca">Explorar eventos</a>
+    </div>
+  </section>
+
+  <section id="sobre" class="intro" aria-labelledby="about-title">
+    <div class="shell">
+      <form id="busca" class="search-panel" role="search"
+        (submit)="search($event, searchInput.value, locationInput.value, categoryInput.value, catalog)">
+        <h2>O que você quer viver?</h2>
+        <div class="search-grid">
+          <label for="event-search">Evento
+            <input #searchInput id="event-search" type="search" placeholder="Nome ou palavra-chave">
+          </label>
+          <label for="event-city">Cidade
+            <select #locationInput id="event-city">
+              <option value="">Todas as cidades</option>
+              @for (item of cities; track item) {
+                <option [value]="item" [selected]="city() === item">{{ item }}</option>
+              }
+            </select>
+          </label>
+          <label for="event-category">Categoria
+            <select #categoryInput id="event-category">
+              @for (item of categories; track item) {
+                <option [value]="item" [selected]="category() === item">{{ item === 'Todos' ? 'Todas as categorias' : item }}</option>
+              }
+            </select>
+          </label>
+          <button class="button" type="submit">Buscar eventos</button>
+        </div>
+      </form>
+
+      <div class="intro-content">
+        <div>
+          <h2 id="about-title">Tem sempre algo bom<br> <em>para viver de perto.</em></h2>
+          <p>Do primeiro acorde à última cena, encontre experiências que combinam com você.</p>
+        </div>
+        <div class="category-nav" role="group" aria-label="Explorar por categoria">
+          @for (item of categories.slice(1); track item) {
+            <a href="#eventos" (click)="clearFilters(searchInput, locationInput, categoryInput); category.set(item)">{{ item }}</a>
+          }
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section #catalog id="eventos" class="catalog shell" aria-labelledby="catalog-title">
+    <header class="section-heading">
+      <h2 id="catalog-title">Encontre seu próximo evento</h2>
+      <p>Explore uma amostra do catálogo TicketWave.</p>
+    </header>
+    <div class="filters" role="group" aria-label="Filtrar por categoria">
+      @for (item of categories; track item) {
+        <button type="button" [attr.aria-pressed]="category() === item" (click)="category.set(item)">{{ item }}</button>
+      }
+    </div>
+    @if (city() || query()) {
+      <p class="active-search">
+        @if (query()) { Busca por “{{ query() }}” }
+        @if (city()) { <span>{{ city() }}</span> }
+        <button type="button" (click)="clearFilters(searchInput, locationInput, categoryInput)">Limpar busca</button>
+      </p>
+    }
+
+    <div class="cards" aria-live="polite">
+      @for (event of filteredEvents(); track event.title) {
+        <article class="card">
+          <button type="button" class="card-button" (click)="showEvent(event, details)" [attr.aria-label]="'Ver detalhes de ' + event.title">
+            <img class="card-image" [src]="event.image" alt="" width="836" height="470" loading="lazy">
+            <span class="category">{{ event.category }}</span>
+            <div class="card-content">
+              <p class="event-date">{{ event.date }}</p>
+              <h3>{{ event.title }}</h3>
+              <p class="location">{{ event.location }}</p>
+              <div class="card-footer">
+                <p>A partir de <strong>{{ event.price }}</strong></p>
+                <span aria-hidden="true">Ver detalhes</span>
+              </div>
+            </div>
+          </button>
+        </article>
+      } @empty {
+        <div class="empty">
+          <h3>Nenhum evento encontrado</h3>
+          <p>Tente outro termo ou explore todas as categorias.</p>
+          <button type="button" class="button button-outline" (click)="clearFilters(searchInput, locationInput, categoryInput)">Limpar filtros</button>
+        </div>
+      }
+    </div>
+  </section>
+
+  <section class="questions" id="duvidas" aria-labelledby="questions-title">
+    <div class="shell">
+      <header class="section-heading"><h2 id="questions-title">Dúvidas frequentes</h2></header>
+      <div class="questions-list">
+        <details>
+          <summary>Como encontro eventos na minha cidade?</summary>
+          <p>Escolha uma cidade na busca. Você também pode combinar a cidade com uma categoria ou um nome de evento.</p>
+        </details>
+        <details>
+          <summary>Preciso de uma conta para explorar a vitrine?</summary>
+          <p>Você pode buscar e abrir os detalhes sem entrar. Use <a routerLink="/entrar">Entrar</a> para acessar seu perfil ou criar uma conta.</p>
+        </details>
+        <details>
+          <summary>Os eventos e preços da vitrine são reais?</summary>
+          <p>Os eventos e preços exibidos são exemplos para demonstrar o catálogo da TicketWave.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="shell footer-content">
+    <a class="brand" href="#inicio" aria-label="TicketWave, voltar ao início">
+      <img src="assets/home/mark.png" alt="" width="32" height="32">
+      <span>Ticket<span>Wave</span></span>
+    </a>
+    <nav aria-label="Navegação do rodapé">
+      <a href="#eventos">Eventos</a>
+      <a href="#duvidas">Dúvidas</a>
+      <a [routerLink]="session.user() ? '/conta' : '/entrar'">{{ session.user() ? 'Minha conta' : 'Entrar' }}</a>
+    </nav>
+  </div>
+</footer>
+
+<dialog #details aria-labelledby="event-title">
+  @if (selectedEvent(); as event) {
+    <img class="dialog-image" [src]="event.image" alt="">
+    <div class="dialog-body">
+      <p class="event-date">{{ event.date }}</p>
+      <h2 id="event-title">{{ event.title }}</h2>
+      <p class="location">{{ event.location }}</p>
+      <p>{{ event.description }}</p>
+      <p class="dialog-price">Preço ilustrativo <strong>{{ event.price }}</strong></p>
+      <form method="dialog"><button class="button" autofocus>Fechar</button></form>
+    </div>
+  }
+</dialog>

@@ -1,0 +1,14 @@
+:host-context([data-theme='dark']) { background: #0c1322; }
+:host-context([data-theme='dark']) :is(.site-header, .button-outline, .search-panel, .filters button, .category, .card-content, .questions-list details, dialog) {
+  background: var(--wave-surface); border-color: var(--wave-line);
+}
+:host-context([data-theme='dark']) :is(.brand span span, nav a:hover, .button-outline, .hero h1 em, .filters button, .category, .active-search button, .card-footer span, .questions-list p a) {
+  color: var(--dark-link);
+}
+:host-context([data-theme='dark']) .brand img { mix-blend-mode: normal; }
+:host-context([data-theme='dark']) .hero::before { background: linear-gradient(180deg, #0c1322 0%, #0c172bee 26%, #0c172b82 62%, #0c172b2b 100%); }
+:host-context([data-theme='dark']) .hero p { color: #dce7fa; }
+:host-context([data-theme='dark']) :is(input, select) { background-color: var(--dark-field); border-color: var(--wave-line); }
+:host-context([data-theme='dark']) .questions { background: #101a2c; }
+:host-context([data-theme='dark']) .filters button[aria-pressed='true'] { background: var(--wave-blue); color: white; }
+:host-context([data-theme='dark']) .questions-list summary::after { color: var(--dark-link); }

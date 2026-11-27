@@ -1,12 +1,15 @@
 package com.projeto.ticket_wave.modules.identity.adapters.rest;
 
+import com.projeto.ticket_wave.modules.identity.application.dto.ForgotPasswordRequest;
 import com.projeto.ticket_wave.modules.identity.application.dto.LoginRequest;
 import com.projeto.ticket_wave.modules.identity.application.dto.LoginResponse;
 import com.projeto.ticket_wave.modules.identity.application.dto.MeResponse;
 import com.projeto.ticket_wave.modules.identity.application.dto.RefreshTokenRequest;
 import com.projeto.ticket_wave.modules.identity.application.dto.RefreshTokenResponse;
 import com.projeto.ticket_wave.modules.identity.application.dto.RegisterUserRequest;
+import com.projeto.ticket_wave.modules.identity.application.dto.ResetPasswordRequest;
 import com.projeto.ticket_wave.modules.identity.application.service.AuthService;
+import com.projeto.ticket_wave.modules.identity.application.service.PasswordResetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,6 +21,19 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AuthController {
     private final AuthService authService;
+    private final PasswordResetService passwordReset;
+
+    @PostMapping("/forgot-password")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public void forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+        passwordReset.request(request.email());
+    }
+
+    @PostMapping("/reset-password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        passwordReset.reset(request);
+    }
 
     @PostMapping("/login")
     @ResponseStatus(HttpStatus.OK)

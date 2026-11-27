@@ -1,0 +1,45 @@
+<header class="site-header">
+  <nav class="site-nav" aria-label="Navegação principal">
+    <a class="brand" routerLink="/" aria-label="TicketWave, início">
+      <img src="assets/home/mark.png" alt="" width="34" height="34">
+      <span>Ticket<span>Wave</span></span>
+    </a>
+    <div class="header-actions">
+      @if (session.user()) { <app-theme-toggle /> }
+      <a class="explore" routerLink="/">Explorar eventos <span aria-hidden="true">↗</span></a>
+    </div>
+  </nav>
+</header>
+
+<main class="account" aria-labelledby="account-title">
+  <h1 id="account-title">Minha conta</h1>
+  @if (session.user(); as user) {
+    <ng-template #accountPanel>
+      <aside class="panel" aria-labelledby="account-details">
+        <h2 id="account-details">Dados da conta</h2>
+        <dl>
+          <dt>Nome do cadastro</dt>
+          <dd>{{ user.name }}</dd>
+          <dt>E-mail</dt>
+          <dd>{{ user.email }}</dd>
+        </dl>
+        <button type="button" class="logout" [disabled]="busy()" (click)="logout()">
+          {{ busy() ? 'Saindo…' : 'Sair da conta' }}
+        </button>
+        @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+      </aside>
+    </ng-template>
+    @if (user.role === 'ROLE_CUSTOMER') {
+      <app-participant-profile [accountName]="user.name">
+        <ng-container [ngTemplateOutlet]="accountPanel" />
+      </app-participant-profile>
+    } @else {
+      <div class="account-only"><ng-container [ngTemplateOutlet]="accountPanel" /></div>
+    }
+  } @else {
+    <section class="panel signed-out">
+      <p role="status">{{ session.sessionNotice() || 'Entre para acessar sua conta.' }}</p>
+      <a class="sign-in" routerLink="/entrar">Entrar</a>
+    </section>
+  }
+</main>

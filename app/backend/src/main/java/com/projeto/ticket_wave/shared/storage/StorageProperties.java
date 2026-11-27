@@ -12,4 +12,6 @@ public class StorageProperties {
     private String bucket;
     private String endpoint;
     private String region;
+    private String accessKey;
+    private String secretKey;
 }

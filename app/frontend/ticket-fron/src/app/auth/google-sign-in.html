@@ -1,0 +1,16 @@
+<div class="google-sign-in" [hidden]="!available()">
+  <p class="divider">ou</p>
+  <div #googleButton class="google-button" [hidden]="linking()" [attr.inert]="working() ? '' : null"></div>
+  @if (linking()) {
+    <form (submit)="confirm($event, password.value)">
+      <p>Confirme a senha da sua conta TicketWave para vincular o Google.</p>
+      <label for="google-link-password">Senha da TicketWave</label>
+      <input #password id="google-link-password" type="password" autocomplete="current-password" maxlength="20" required>
+      <div class="actions">
+        <button type="button" [disabled]="working()" (click)="cancelLink()">Cancelar</button>
+        <button type="submit" [disabled]="working()">Vincular conta</button>
+      </div>
+    </form>
+  }
+  @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+</div>

@@ -6,7 +6,9 @@ import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.infrastructure.persistence.entity.RefreshTokenJpaEntity;
 import com.projeto.ticket_wave.modules.identity.infrastructure.persistence.entity.UserJpaEntity;
 import com.projeto.ticket_wave.shared.persistence.JpaEntityAccess;
+import com.projeto.ticket_wave.shared.exception.UnauthorizedException;
 import java.util.Optional;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,8 +18,19 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 class RefreshTokenPersistenceAdapter implements RefreshTokenRepository {
     private final RefreshTokenJpaRepository repository;
+    private final UserJpaRepository users;
     private final IdentityPersistenceMapper mapper;
     private final JpaEntityAccess entities;
+
+    @Override
+    @Transactional
+    public void lockUserSession(UUID userId) {
+        UserJpaEntity user = users.findForSessionUpdate(userId)
+                .orElseThrow(() -> new UnauthorizedException("Usuário indisponível"));
+        if (!Boolean.TRUE.equals(user.getEnabled())) {
+            throw new UnauthorizedException("Usuário indisponível");
+        }
+    }
 
     @Override
     public Optional<RefreshToken> findByToken(String token) {

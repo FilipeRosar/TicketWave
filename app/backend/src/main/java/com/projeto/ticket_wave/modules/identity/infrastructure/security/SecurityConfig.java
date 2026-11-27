@@ -5,6 +5,7 @@ import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -40,8 +41,14 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/v1/api/auth/google/challenge").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/api/auth/google").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/api/auth/forgot-password", "/v1/api/auth/reset-password").permitAll()
                         .requestMatchers(
-                                "/v1/api/auth/**",
+                                "/v1/api/auth/register",
+                                "/v1/api/auth/login",
+                                "/v1/api/auth/refresh",
+                                "/v1/api/auth/logout",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/docs",
@@ -50,6 +57,9 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/api/event").hasRole("ORGANIZER")
+                        .requestMatchers(HttpMethod.PUT, "/v1/api/event/{id}").hasRole("ORGANIZER")
+                        .requestMatchers(HttpMethod.DELETE, "/v1/api/event/{id}").hasRole("ORGANIZER")
                         .anyRequest()
                         .authenticated())
                 .authenticationProvider(authenticationProvider())
