@@ -24,6 +24,7 @@ public interface EventMapper {
     EventResponse toResponse(Event event);
     List<EventResponse> toResponseList(List<Event> events);
 
+    @Mapping(target = "category", source = "category.name")
     @Mapping(target = "city", source = "venue.address.city")
     @Mapping(target = "status", source = "eventStatus")
     EventSummaryResponse toSummary(Event event);

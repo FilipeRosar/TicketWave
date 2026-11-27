@@ -1,5 +1,6 @@
 package com.projeto.ticket_wave.modules.events.application.dto;
 
+import com.projeto.ticket_wave.modules.events.domain.enums.EventClassification;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventStatus;
 
 import java.math.BigDecimal;
@@ -18,6 +19,12 @@ public record EventSummaryResponse(
         BigDecimal ticketPrice,
 
         String city,
+
+        String category,
+
+        EventClassification classification,
+
+        String shortDescription,
 
         Boolean featured,
 

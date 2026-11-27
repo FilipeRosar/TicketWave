@@ -1,12 +1,14 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { AuthApi } from '../api/auth-api';
+import { EventsApi } from '../api/events-api';
 import { ParticipantProfileApi } from '../api/participant-profile-api';
 import type { Profile, Registration, Tokens } from '../interfaces/auth';
 
 @Injectable({ providedIn: 'root' })
 export class AuthSession {
   private readonly api = inject(AuthApi);
+  private readonly events = inject(EventsApi);
   private readonly profiles = inject(ParticipantProfileApi);
   private readonly profile = signal<Profile | null>(null);
   private readonly notice = signal('');
@@ -38,6 +40,14 @@ export class AuthSession {
     this.profile.set(profile);
     this.notice.set('');
     this.setTokens(tokens);
+  }
+
+  listPublishedEvents(page: number) {
+    return this.events.list(this.accessToken(), page);
+  }
+
+  getEventDetails(id: string) {
+    return this.events.details(this.accessToken(), id);
   }
 
   getParticipantProfile() {

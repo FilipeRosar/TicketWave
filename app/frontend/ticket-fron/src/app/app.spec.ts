@@ -249,6 +249,51 @@ describe('Navegação do TicketWave', () => {
     await harness.fixture.whenStable();
     expect(TestBed.inject(Router).url).toBe('/');
     expect(TestBed.inject(AuthSession).user()?.name).toBe('Pessoa Teste');
+    http.expectOne(request => request.url === '/v1/api/event').flush({ content: [], last: true });
+    http.verify();
+  });
+
+  it('exibe o networking de cada classificação no detalhe do evento', async () => {
+    const http = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(AuthSession);
+    const login = session.login('teste@example.test', 'minha-senha');
+    http.expectOne('/v1/api/auth/login').flush({ accessToken: 'access', refreshToken: 'refresh', expiresIn: 3600000 });
+    await Promise.resolve();
+    http.expectOne('/v1/api/auth/me').flush({ name: 'Pessoa Teste', email: 'teste@example.test', role: 'ROLE_CUSTOMER' });
+    await login;
+
+    const harness = await RouterTestingHarness.create('/');
+    const fixtures = [
+      { id: 'pro', title: 'Encontro profissional', classification: 'PROFESSIONAL' },
+      { id: 'social', title: 'Encontro social', classification: 'SOCIAL' },
+    ];
+    const catalog = http.expectOne(request => request.url === '/v1/api/event');
+    expect(catalog.request.headers.get('Authorization')).toBe('Bearer access');
+    catalog.flush({
+      content: fixtures.map(event => ({
+        ...event, category: 'Eventos', city: 'São Paulo', startDate: '2099-01-01T14:00:00',
+        ticketPrice: 50, shortDescription: 'Descrição breve',
+      })),
+      last: true,
+    });
+    await Promise.resolve();
+    harness.detectChanges();
+
+    const home = harness.routeNativeElement!;
+    const dialog = home.querySelector('dialog')!;
+    dialog.showModal = () => dialog.setAttribute('open', '');
+    const open = async (id: string, title: string, networkingFeatures: string[]) => {
+      home.querySelector<HTMLButtonElement>(`button[aria-label="Ver detalhes de ${title}"]`)!.click();
+      http.expectOne('/v1/api/event/' + id).flush({ description: 'Detalhes do encontro', networkingFeatures });
+      await Promise.resolve();
+      harness.detectChanges();
+      return Array.from(dialog.querySelectorAll('.event-networking li'), item => item.textContent?.trim());
+    };
+
+    expect(await open('pro', 'Encontro profissional', ['MEETING_AGENDA', 'ROOMS']))
+      .toEqual(['Agenda de reuniões', 'Salas']);
+    expect(await open('social', 'Encontro social', ['WALL', 'GROUPS'])).toEqual(['Mural', 'Grupos']);
+    expect(await open('social', 'Encontro social', [])).toEqual([]);
     http.verify();
   });
 });

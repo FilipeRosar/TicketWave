@@ -39,14 +39,14 @@
           <label for="event-city">Cidade
             <select #locationInput id="event-city">
               <option value="">Todas as cidades</option>
-              @for (item of cities; track item) {
+              @for (item of cities(); track item) {
                 <option [value]="item" [selected]="city() === item">{{ item }}</option>
               }
             </select>
           </label>
           <label for="event-category">Categoria
             <select #categoryInput id="event-category">
-              @for (item of categories; track item) {
+              @for (item of categories(); track item) {
                 <option [value]="item" [selected]="category() === item">{{ item === 'Todos' ? 'Todas as categorias' : item }}</option>
               }
             </select>
@@ -61,7 +61,7 @@
           <p>Do primeiro acorde à última cena, encontre experiências que combinam com você.</p>
         </div>
         <div class="category-nav" role="group" aria-label="Explorar por categoria">
-          @for (item of categories.slice(1); track item) {
+          @for (item of categories().slice(1); track item) {
             <a href="#eventos" (click)="clearFilters(searchInput, locationInput, categoryInput); category.set(item)">{{ item }}</a>
           }
         </div>
@@ -72,10 +72,10 @@
   <section #catalog id="eventos" class="catalog shell" aria-labelledby="catalog-title">
     <header class="section-heading">
       <h2 id="catalog-title">Encontre seu próximo evento</h2>
-      <p>Explore uma amostra do catálogo TicketWave.</p>
+      @if (!session.user()) { <p>Explore uma amostra do catálogo TicketWave.</p> }
     </header>
     <div class="filters" role="group" aria-label="Filtrar por categoria">
-      @for (item of categories; track item) {
+      @for (item of categories(); track item) {
         <button type="button" [attr.aria-pressed]="category() === item" (click)="category.set(item)">{{ item }}</button>
       }
     </div>
@@ -88,7 +88,7 @@
     }
 
     <div class="cards" aria-live="polite">
-      @for (event of filteredEvents(); track event.title) {
+      @for (event of filteredEvents(); track event.id ?? event.title) {
         <article class="card">
           <button type="button" class="card-button" (click)="showEvent(event, details)" [attr.aria-label]="'Ver detalhes de ' + event.title">
             <img class="card-image" [src]="event.image" alt="" width="836" height="470" loading="lazy">
@@ -97,6 +97,9 @@
               <p class="event-date">{{ event.date }}</p>
               <h3>{{ event.title }}</h3>
               <p class="location">{{ event.location }}</p>
+              @if (event.classification) {
+                <span class="event-classification">{{ classificationNames[event.classification] }}</span>
+              }
               <div class="card-footer">
                 <p>A partir de <strong>{{ event.price }}</strong></p>
                 <span aria-hidden="true">Ver detalhes</span>
@@ -105,13 +108,26 @@
           </button>
         </article>
       } @empty {
-        <div class="empty">
-          <h3>Nenhum evento encontrado</h3>
-          <p>Tente outro termo ou explore todas as categorias.</p>
-          <button type="button" class="button button-outline" (click)="clearFilters(searchInput, locationInput, categoryInput)">Limpar filtros</button>
-        </div>
+        @if (!loadingEvents() && !catalogError()) {
+          <div class="empty">
+            <h3>Nenhum evento encontrado</h3>
+            <p>Tente outro termo ou explore todas as categorias.</p>
+            <button type="button" class="button button-outline" (click)="clearFilters(searchInput, locationInput, categoryInput)">Limpar filtros</button>
+          </div>
+        }
       }
     </div>
+    @if (loadingEvents()) { <p class="event-catalog-feedback" role="status">Carregando eventos…</p> }
+    @if (catalogError()) {
+      <div class="event-catalog-feedback">
+        <p role="alert">Não foi possível carregar os eventos.</p>
+        <button class="button button-outline" type="button" (click)="loadEvents()">Tentar novamente</button>
+      </div>
+    } @else if (hasMore() && !loadingEvents()) {
+      <div class="event-catalog-feedback">
+        <button class="button button-outline" type="button" (click)="loadEvents()">Carregar mais eventos</button>
+      </div>
+    }
   </section>
 
   <section class="questions" id="duvidas" aria-labelledby="questions-title">
@@ -156,8 +172,30 @@
       <p class="event-date">{{ event.date }}</p>
       <h2 id="event-title">{{ event.title }}</h2>
       <p class="location">{{ event.location }}</p>
-      <p>{{ event.description }}</p>
-      <p class="dialog-price">Preço ilustrativo <strong>{{ event.price }}</strong></p>
+      @if (event.classification; as classification) {
+        <p class="event-classification">{{ classificationNames[classification] }} · {{ event.category }}</p>
+      }
+      <p>{{ selectedDetails()?.description ?? event.description }}</p>
+      <p class="dialog-price">{{ event.id ? 'Preço' : 'Preço ilustrativo' }} <strong>{{ event.price }}</strong></p>
+      @if (event.id; as id) {
+        @if (selectedDetails(); as detail) {
+          @if (detail.networkingFeatures.length) {
+            <section class="event-networking" aria-labelledby="networking-title">
+              <h3 id="networking-title">Networking</h3>
+              <ul>
+                @for (feature of detail.networkingFeatures; track feature) {
+                  <li>{{ featureNames[feature] }}</li>
+                }
+              </ul>
+            </section>
+          }
+        } @else if (loadingDetails()) {
+          <p class="event-catalog-feedback" role="status">Carregando detalhes…</p>
+        } @else if (detailError()) {
+          <p class="event-catalog-feedback" role="alert">Não foi possível carregar os detalhes.</p>
+          <button class="button button-outline" type="button" (click)="loadDetails(id)">Tentar novamente</button>
+        }
+      }
       <form method="dialog"><button class="button" autofocus>Fechar</button></form>
     </div>
   }

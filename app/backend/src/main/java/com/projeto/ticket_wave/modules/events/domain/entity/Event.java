@@ -1,7 +1,9 @@
 package com.projeto.ticket_wave.modules.events.domain.entity;
 
+import com.projeto.ticket_wave.modules.events.domain.enums.EventClassification;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventStatus;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventType;
+import com.projeto.ticket_wave.modules.events.domain.enums.NetworkingFeature;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.shared.exception.BusinessException;
 import com.projeto.ticket_wave.shared.exception.ConflictException;
@@ -42,6 +44,9 @@ public class Event extends BaseEntity {
     private EventType eventType;
 
     @Builder.Default
+    private EventClassification classification = EventClassification.SOCIAL;
+
+    @Builder.Default
     private Boolean published =  false;
 
     @Builder.Default
@@ -74,6 +79,15 @@ public class Event extends BaseEntity {
 
     @Builder.Default
     private List<EventImage> images = new ArrayList<>();
+
+    public List<NetworkingFeature> getNetworkingFeatures() {
+        if (!Boolean.TRUE.equals(networkingEnabled)) return List.of();
+
+        return switch (classification) {
+            case PROFESSIONAL -> List.of(NetworkingFeature.MEETING_AGENDA, NetworkingFeature.ROOMS);
+            case SOCIAL -> List.of(NetworkingFeature.WALL, NetworkingFeature.GROUPS);
+        };
+    }
 
     public boolean isPublishedInCatalog() {
         return eventStatus == EventStatus.PUBLISHED && Boolean.TRUE.equals(published);

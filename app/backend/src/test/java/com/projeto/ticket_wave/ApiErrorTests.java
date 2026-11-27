@@ -1,6 +1,7 @@
 package com.projeto.ticket_wave;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.CategoryJpaRepository;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.VenueJpaRepository;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.AddressJpaEntity;
@@ -12,6 +13,10 @@ import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.CustomUserDetails;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.JwtService;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.GoogleIdentityVerifier;
+import com.projeto.ticket_wave.modules.organizations.domain.OrganizationMemberRole;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationJpaRepository;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationMemberJpaEntity;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationMemberJpaRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.RequestDispatcher;
@@ -20,13 +25,17 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +44,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -47,6 +58,9 @@ import java.util.concurrent.TimeUnit;
 import org.mockito.ArgumentCaptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -98,6 +112,20 @@ class ApiErrorTests {
 
     @Autowired
     private VenueJpaRepository venues;
+
+    @Autowired
+    private OrganizationJpaRepository organizations;
+
+    @MockitoSpyBean
+    private OrganizationMemberJpaRepository organizationMembers;
+
+    @DynamicPropertySource
+    static void organizationDocumentKey(DynamicPropertyRegistry registry) {
+        byte[] key = new byte[32];
+        new SecureRandom().nextBytes(key);
+        String encodedKey = Base64.getEncoder().encodeToString(key);
+        registry.add("app.organizations.document-key", () -> encodedKey);
+    }
 
     @Test
     void registersLogsInRotatesAndRevokesTokens() throws Exception {
@@ -352,6 +380,33 @@ class ApiErrorTests {
                 .andExpect(status().isOk());
         mvc.perform(get(searchPath).header(HttpHeaders.AUTHORIZATION, participantToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(id));
+        mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, participantToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.category").value("Autorização"))
+                .andExpect(jsonPath("$.classification").value("SOCIAL"))
+                .andExpect(jsonPath("$.networkingFeatures[0]").value("WALL"))
+                .andExpect(jsonPath("$.networkingFeatures[1]").value("GROUPS"))
+                .andExpect(jsonPath("$.networkingFeatures.length()").value(2));
+        expectError(mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"classification":"UNKNOWN"}
+                        """)), 400, itemPath);
+        mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"classification":"PROFESSIONAL"}
+                        """))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eventType").value("ONLINE"))
+                .andExpect(jsonPath("$.classification").value("PROFESSIONAL"));
+        mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, participantToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.networkingFeatures[0]").value("MEETING_AGENDA"))
+                .andExpect(jsonPath("$.networkingFeatures[1]").value("ROOMS"))
+                .andExpect(jsonPath("$.networkingFeatures.length()").value(2));
+        mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"networkingEnabled":false}
+                        """))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.classification").value("PROFESSIONAL"))
+                .andExpect(jsonPath("$.networkingFeatures").isEmpty());
         expectError(mvc.perform(delete(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 409, itemPath);
 
         mvc.perform(patch(cancelPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
@@ -370,8 +425,10 @@ class ApiErrorTests {
         expectError(mvc.perform(delete(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 409, itemPath);
 
         String secondDraft = mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
-                .contentType(MediaType.APPLICATION_JSON).content(validEvent.replace("Evento de teste", "Rascunho para excluir")))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+                .contentType(MediaType.APPLICATION_JSON).content(json.readValue(validEvent, ObjectNode.class)
+                        .put("title", "Rascunho para excluir").put("classification", "PROFESSIONAL").toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.classification").value("PROFESSIONAL"))
+                .andReturn().getResponse().getContentAsString();
         String draftPath = eventPath + "/" + json.readTree(secondDraft).get("id").asText();
         mvc.perform(delete(draftPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
                 .andExpect(status().isNoContent());
@@ -624,6 +681,102 @@ class ApiErrorTests {
         String nonce = json.readTree(challenge).get("nonce").asText();
         when(google.verify(credential)).thenReturn(new GoogleIdentityVerifier.Identity(
                 subject, email, "Conta Google Teste", nonce, authoritative));
+    }
+
+    @Test
+    void createsPfAndPjOrganizationsWithAuthenticatedOwnerAndPrivateDocument() throws Exception {
+        String path = "/v1/api/organizations";
+        String email = "organization-owner@example.test";
+        String ownerToken = bearerFor(email, "11999998210", Role.ROLE_CUSTOMER);
+        UUID ownerId = users.findByEmail(email).orElseThrow().getId();
+        String individual = """
+                {"name":"  Eventos Independentes  ","type":"PF","userId":"00000000-0000-0000-0000-000000000001","role":"ADMIN"}
+                """;
+        expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(individual)), 401, path);
+
+        String body = mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, ownerToken)
+                .contentType(MediaType.APPLICATION_JSON).content(individual))
+                .andExpect(status().isCreated())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.name").value("Eventos Independentes"))
+                .andExpect(jsonPath("$.type").value("PF"))
+                .andExpect(jsonPath("$.role").value("OWNER"))
+                .andExpect(jsonPath("$.status").value("ACTIVE"))
+                .andReturn().getResponse().getContentAsString();
+        UUID individualId = UUID.fromString(json.readTree(body).get("id").asText());
+        assertThat(organizations.findById(individualId).orElseThrow().getDocumentCiphertext()).isNull();
+        assertThat(organizationMembers.findAll()).anySatisfy(member -> {
+            assertThat(member.getOrganizationId()).isEqualTo(individualId);
+            assertThat(member.getUserId()).isEqualTo(ownerId);
+            assertThat(member.getRole()).isEqualTo(OrganizationMemberRole.OWNER);
+        });
+
+        for (String document : List.of("529.982.247-25", "11.222.333/0001-81", "12.abc.345/01de-35")) {
+            String type = document.length() == 14 ? "PF" : "PJ";
+            String company = json.createObjectNode().put("name", "Organização com documento")
+                    .put("type", type).put("document", document).toString();
+            String response = mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, ownerToken)
+                    .contentType(MediaType.APPLICATION_JSON).content(company))
+                    .andExpect(status().isCreated()).andExpect(jsonPath("$.type").value(type))
+                    .andExpect(jsonPath("$.role").value("OWNER")).andExpect(jsonPath("$.document").doesNotExist())
+                    .andExpect(jsonPath("$.documentCiphertext").doesNotExist())
+                    .andReturn().getResponse().getContentAsString();
+            String normalized = document.replaceAll("[./-]", "");
+            assertThat(response).doesNotContain(document, normalized);
+            UUID organizationId = UUID.fromString(json.readTree(response).get("id").asText());
+            byte[] encrypted = organizations.findById(organizationId).orElseThrow().getDocumentCiphertext();
+            assertThat(encrypted).hasSize(normalized.length() + 28);
+            assertThat(new String(encrypted, StandardCharsets.ISO_8859_1)).doesNotContain(normalized);
+        }
+
+        assertThatThrownBy(() -> organizationMembers.saveAndFlush(
+                new OrganizationMemberJpaEntity(individualId, ownerId, OrganizationMemberRole.OWNER)))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThat(users.findById(ownerId).orElseThrow().getRole()).isEqualTo(Role.ROLE_CUSTOMER);
+    }
+
+    @Test
+    void rejectsInvalidOrganizationsWithoutCreatingMemberships() throws Exception {
+        String path = "/v1/api/organizations";
+        String token = bearerFor("invalid-org@example.test", "11999998211", Role.ROLE_CUSTOMER);
+        long organizationCount = organizations.count();
+        long membershipCount = organizationMembers.count();
+
+        for (String body : List.of(
+                "{\"name\":\" \",\"type\":\"PF\"}",
+                "{\"name\":\"Empresa sem tipo\"}",
+                "{\"name\":\"Tipo inválido\",\"type\":\"OUTRO\"}",
+                "{\"name\":\"Empresa sem documento\",\"type\":\"PJ\"}",
+                "{\"name\":\"Empresa com documento inválido\",\"type\":\"PJ\",\"document\":\"11.222.333/0001-82\"}",
+                "{\"name\":\"Pessoa com documento inválido\",\"type\":\"PF\",\"document\":\"111.111.111-11\"}")) {
+            expectError(mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, token)
+                    .contentType(MediaType.APPLICATION_JSON).content(body)), 400, path);
+        }
+
+        assertThat(organizations.count()).isEqualTo(organizationCount);
+        assertThat(organizationMembers.count()).isEqualTo(membershipCount);
+    }
+
+    @Test
+    void rollsBackOrganizationWhenOwnerMembershipFails() throws Exception {
+        String path = "/v1/api/organizations";
+        String token = bearerFor("rollback-org@example.test", "11999998212", Role.ROLE_CUSTOMER);
+        long organizationCount = organizations.count();
+        long membershipCount = organizationMembers.count();
+
+        doAnswer(invocation -> {
+            OrganizationMemberJpaEntity member = invocation.getArgument(0);
+            assertThat(organizations.findById(member.getOrganizationId())).isPresent();
+            throw new IllegalStateException("Falha simulada ao gravar o vínculo");
+        }).when(organizationMembers).saveAndFlush(any(OrganizationMemberJpaEntity.class));
+
+        expectError(mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, token)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"name":"Organização com falha","type":"PF"}
+                        """)), 500, path);
+        verify(organizationMembers).saveAndFlush(any(OrganizationMemberJpaEntity.class));
+        assertThat(organizations.count()).isEqualTo(organizationCount);
+        assertThat(organizationMembers.count()).isEqualTo(membershipCount);
     }
 
     private String bearerFor(String email, String phone, Role role) {

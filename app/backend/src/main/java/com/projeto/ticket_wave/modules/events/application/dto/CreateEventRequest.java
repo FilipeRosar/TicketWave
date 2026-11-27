@@ -1,5 +1,6 @@
 package com.projeto.ticket_wave.modules.events.application.dto;
 
+import com.projeto.ticket_wave.modules.events.domain.enums.EventClassification;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventType;
 
 import jakarta.validation.constraints.Digits;
@@ -44,6 +45,8 @@ public record CreateEventRequest(
 
         @NotNull
         EventType eventType,
+
+        EventClassification classification,
 
         @NotNull
         UUID categoryId,

@@ -1,0 +1,13 @@
+.event-classification {
+  display: inline-block;
+  margin-block: 7px;
+  color: var(--wave-muted);
+  font-size: .82rem;
+  font-weight: 750;
+}
+.event-catalog-feedback { margin-block-start: 18px; text-align: center; color: var(--wave-muted); }
+.event-catalog-feedback .button { margin-block-start: 8px; }
+.event-networking { padding: 14px; margin-block-start: 16px; border-radius: 12px; background: var(--wave-mist); }
+.event-networking h3 { font-size: 1rem; margin-block-end: 8px; }
+.event-networking ul { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; padding: 0; list-style: none; }
+.event-networking li { padding: 10px; border-radius: 8px; background: var(--wave-surface); border: 1px solid var(--wave-line); font-size: .88rem; font-weight: 750; }

@@ -1,5 +1,6 @@
 package com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity;
 
+import com.projeto.ticket_wave.modules.events.domain.enums.EventClassification;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventStatus;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventType;
 import com.projeto.ticket_wave.modules.identity.infrastructure.persistence.entity.UserJpaEntity;
@@ -61,6 +62,10 @@ public class EventJpaEntity extends JpaBaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private EventType eventType;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private EventClassification classification = EventClassification.SOCIAL;
 
     @Column(nullable = false)
     private Boolean published =  false;

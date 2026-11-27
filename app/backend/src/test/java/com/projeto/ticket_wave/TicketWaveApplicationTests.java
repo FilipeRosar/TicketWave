@@ -18,22 +18,35 @@ import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.
 import com.projeto.ticket_wave.modules.identity.application.port.UserRepository;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
+import com.projeto.ticket_wave.modules.organizations.domain.OrganizationMemberRole;
+import com.projeto.ticket_wave.modules.organizations.domain.OrganizationStatus;
+import com.projeto.ticket_wave.modules.organizations.domain.OrganizationType;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationJpaEntity;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationJpaRepository;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationMemberJpaEntity;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationMemberJpaRepository;
 import jakarta.persistence.EntityManager;
+import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.flyway.FlywayMigrationStrategy;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, TicketWaveApplicationTests.OrganizationUpgrade.class})
 @SpringBootTest
 class TicketWaveApplicationTests {
 
@@ -55,8 +68,66 @@ class TicketWaveApplicationTests {
     @Autowired
     private EntityManager entityManager;
 
+    @Autowired
+    private OrganizationJpaRepository organizations;
+
+    @Autowired
+    private OrganizationMemberJpaRepository organizationMembers;
+
     @Test
-    void contextLoads() {
+    void upgradesExistingDatabaseAndPreservesUsersForOrganizationMembership() {
+        UUID legacyId = UUID.fromString("12f38108-8030-48db-9fd0-6356b39d9e76");
+        User legacy = users.findById(legacyId).orElseThrow();
+        assertThat(legacy.getEmail()).isEqualTo("legacy-organization@example.test");
+        assertThat(legacy.getName()).isEqualTo("Usuário anterior à V20");
+        assertThat(legacy.getPassword()).isEqualTo("fixture-password-hash");
+        assertThat(legacy.getRole()).isEqualTo(Role.ROLE_CUSTOMER);
+        assertThat(legacy.getVersion()).isEqualTo(3L);
+        assertThat(legacy.getEnabled()).isTrue();
+
+        var organization = organizations.saveAndFlush(
+                new OrganizationJpaEntity("Organização após V20", OrganizationType.PF, null));
+        UUID organizationId = organization.getId();
+        UUID missingId = UUID.randomUUID();
+        assertThatThrownBy(() -> organizationMembers.saveAndFlush(
+                new OrganizationMemberJpaEntity(missingId, legacyId, OrganizationMemberRole.OWNER)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("organization_members_organization_id_fkey");
+        assertThatThrownBy(() -> organizationMembers.saveAndFlush(
+                new OrganizationMemberJpaEntity(organizationId, missingId, OrganizationMemberRole.OWNER)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("organization_members_user_id_fkey");
+
+        var membership = organizationMembers.saveAndFlush(
+                new OrganizationMemberJpaEntity(organizationId, legacyId, OrganizationMemberRole.OWNER));
+        assertThat(organizationMembers.findById(membership.getId()).orElseThrow())
+                .satisfies(saved -> {
+                    assertThat(saved.getUserId()).isEqualTo(legacyId);
+                    assertThat(saved.getOrganizationId()).isEqualTo(organizationId);
+                    assertThat(saved.getRole()).isEqualTo(OrganizationMemberRole.OWNER);
+                    assertThat(saved.getStatus()).isEqualTo(OrganizationStatus.ACTIVE);
+                });
+        assertThatThrownBy(() -> organizationMembers.saveAndFlush(
+                new OrganizationMemberJpaEntity(organizationId, legacyId, OrganizationMemberRole.ADMIN)))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("uk_organization_member");
+        assertThat(users.findById(legacyId).orElseThrow().getRole()).isEqualTo(Role.ROLE_CUSTOMER);
+    }
+
+    @TestConfiguration(proxyBeanMethods = false)
+    static class OrganizationUpgrade {
+        @Bean
+        FlywayMigrationStrategy stageDatabaseBeforeOrganizations() {
+            return flyway -> {
+                Flyway.configure()
+                        .configuration(flyway.getConfiguration())
+                        .locations("classpath:db/migration", "classpath:db/test/organization-upgrade")
+                        .target("19")
+                        .load()
+                        .migrate();
+                flyway.migrate();
+            };
+        }
     }
 
     @Test
