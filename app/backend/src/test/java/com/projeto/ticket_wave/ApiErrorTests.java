@@ -11,6 +11,7 @@ import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.CustomUserDetails;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.JwtService;
+import com.projeto.ticket_wave.modules.identity.infrastructure.security.GoogleIdentityVerifier;
 import jakarta.persistence.EntityManager;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.RequestDispatcher;
@@ -47,6 +48,7 @@ import org.mockito.ArgumentCaptor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -82,6 +84,12 @@ class ApiErrorTests {
 
     @MockitoBean
     private JavaMailSender mail;
+
+    @MockitoBean
+    private GoogleIdentityVerifier google;
+
+    @Autowired
+    private org.springframework.security.crypto.password.PasswordEncoder passwords;
 
     @Autowired
     private CategoryJpaRepository categories;
@@ -473,6 +481,77 @@ class ApiErrorTests {
     private String resetBody(String token, String password) {
         return json.createObjectNode().put("token", token).put("password", password)
                 .put("passwordConfirmation", password).toString();
+    }
+
+    @Test
+    void googleCreatesParticipantAndUsesSubjectOnLaterLogins() throws Exception {
+        String path = "/v1/api/auth/google";
+        String email = "social-new@gmail.com";
+        String credential = "first-google-credential";
+        prepareGoogle(credential, "google-first-subject", email, true);
+        String body = json.createObjectNode().put("credential", credential).toString();
+        String session = mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.refreshToken").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        User registered = users.findByEmail(email).orElseThrow();
+        assertThat(registered.getRole()).isEqualTo(Role.ROLE_CUSTOMER);
+        assertThat(registered.getGoogleSubject()).isEqualTo("google-first-subject");
+        assertThat(registered.getPhone()).isNull();
+        mvc.perform(get("/v1/api/auth/me").header(HttpHeaders.AUTHORIZATION,
+                        "Bearer " + json.readTree(session).get("accessToken").asText()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.email").value(email));
+        expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(body)), 401, path);
+
+        prepareGoogle("second-credential", "google-first-subject", "changed-google-email@gmail.com", true);
+        mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(json.createObjectNode().put("credential", "second-credential").toString()))
+                .andExpect(status().isOk());
+        assertThat(users.findByEmail("changed-google-email@gmail.com")).isEmpty();
+        assertThat(users.findByEmail(email).orElseThrow().getId()).isEqualTo(registered.getId());
+    }
+
+    @Test
+    void googleLinksExistingAccountAndRequiresPasswordWhenGoogleDoesNotOwnEmail() throws Exception {
+        String path = "/v1/api/auth/google";
+        String authoritative = "ticketwave-link@gmail.com";
+        bearerFor(authoritative, "11999998001", Role.ROLE_CUSTOMER);
+        User existing = users.findByEmail(authoritative).orElseThrow();
+        prepareGoogle("authoritative-credential", "google-link-subject", authoritative, true);
+        mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(json.createObjectNode().put("credential", "authoritative-credential").toString()))
+                .andExpect(status().isOk());
+        User linked = users.findByEmail(authoritative).orElseThrow();
+        assertThat(linked.getId()).isEqualTo(existing.getId());
+        assertThat(linked.getGoogleSubject()).isEqualTo("google-link-subject");
+
+        String thirdParty = "ticketwave-link@example.test";
+        bearerFor(thirdParty, "11999998002", Role.ROLE_CUSTOMER);
+        User thirdPartyUser = users.findByEmail(thirdParty).orElseThrow();
+        thirdPartyUser.setPassword(passwords.encode("local-password"));
+        users.save(thirdPartyUser);
+        prepareGoogle("third-party-credential", "google-third-party-subject", thirdParty, false);
+        var request = json.createObjectNode().put("credential", "third-party-credential");
+        expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content(request.toString())),
+                428, path);
+        expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(request.put("password", "wrong-password").toString())), 428, path);
+        assertThat(users.findByEmail(thirdParty).orElseThrow().getGoogleSubject()).isNull();
+        mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(request.put("password", "local-password").toString())).andExpect(status().isOk());
+        assertThat(users.findByEmail(thirdParty).orElseThrow().getGoogleSubject()).isEqualTo("google-third-party-subject");
+    }
+
+    private void prepareGoogle(String credential, String subject, String email, boolean authoritative) throws Exception {
+        String clientId = "ticketwave-test.apps.googleusercontent.com";
+        when(google.clientId()).thenReturn(clientId);
+        String challenge = mvc.perform(get("/v1/api/auth/google/challenge"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.clientId").value(clientId))
+                .andReturn().getResponse().getContentAsString();
+        String nonce = json.readTree(challenge).get("nonce").asText();
+        when(google.verify(credential)).thenReturn(new GoogleIdentityVerifier.Identity(
+                subject, email, "Conta Google Teste", nonce, authoritative));
     }
 
     private String bearerFor(String email, String phone, Role role) {

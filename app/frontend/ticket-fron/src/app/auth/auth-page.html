@@ -95,6 +95,7 @@
           {{ busy() ? 'Aguarde…' : registering ? 'Criar minha conta' : 'Entrar' }}
         </button>
       </form>
+      <app-google-sign-in [(working)]="busy" />
       @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
     </div>
   </section>

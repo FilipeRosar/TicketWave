@@ -4,6 +4,7 @@ import com.projeto.ticket_wave.modules.identity.application.port.UserRepository;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.infrastructure.persistence.entity.UserJpaEntity;
 import com.projeto.ticket_wave.shared.persistence.JpaEntityAccess;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,16 @@ class UserPersistenceAdapter implements UserRepository {
     @Override
     public Optional<User> findByEmail(String email) {
         return repository.findByEmail(email).map(mapper::toDomain);
+    }
+
+    @Override
+    public Optional<User> findByGoogleSubjectForUpdate(String subject) {
+        return repository.findByGoogleSubject(subject).map(mapper::toDomain);
+    }
+
+    @Override
+    public List<User> findByEmailIgnoringCaseForUpdate(String email) {
+        return repository.findAllByEmailIgnoreCase(email).stream().map(mapper::toDomain).toList();
     }
 
     @Override

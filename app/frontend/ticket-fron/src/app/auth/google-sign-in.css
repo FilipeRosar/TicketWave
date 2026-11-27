@@ -1,0 +1,14 @@
+.google-sign-in { margin-top: 20px; }
+.google-sign-in[hidden], .google-button[hidden] { display: none; }
+.divider { display: flex; align-items: center; gap: 12px; margin: 0 0 15px; color: var(--wave-muted); font-size: .85rem; }
+.divider::before, .divider::after { content: ''; flex: 1; border-top: 1px solid var(--wave-line); }
+.google-button { display: flex; justify-content: center; }
+form { display: grid; gap: 8px; }
+form p { color: var(--wave-muted); }
+label { font-weight: 700; }
+input, button { padding: 8px 12px; border: 1px solid var(--wave-line); border-radius: 8px; }
+button { cursor: pointer; font-weight: 700; }
+button:disabled { opacity: .65; cursor: wait; }
+button[type="submit"] { background: var(--wave-blue); color: white; }
+.actions { display: flex; gap: 8px; justify-content: flex-end; }
+.error { margin-top: 10px; color: #891d28; }

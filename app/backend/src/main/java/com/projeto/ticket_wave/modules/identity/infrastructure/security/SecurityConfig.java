@@ -41,6 +41,8 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/v1/api/auth/google/challenge").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/api/auth/google").permitAll()
                         .requestMatchers(HttpMethod.POST, "/v1/api/auth/forgot-password", "/v1/api/auth/reset-password").permitAll()
                         .requestMatchers(
                                 "/v1/api/auth/register",

@@ -24,6 +24,9 @@ public class UserJpaEntity extends JpaBaseEntity {
     @Column(nullable = false, unique = true)
     private String email;
 
+    @Column(name = "google_subject", unique = true)
+    private String googleSubject;
+
     @Column(nullable = false)
     private String password;
 
@@ -31,7 +34,7 @@ public class UserJpaEntity extends JpaBaseEntity {
     @Column(nullable = false)
     private Role role;
 
-    @Column(nullable = false, unique = true)
+    @Column(unique = true)
     private String phone;
 
     @Column(name = "birth_date")

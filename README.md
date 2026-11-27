@@ -45,6 +45,12 @@ docker compose down
 2. Use `POST /v1/api/auth/login` para obter `accessToken` e `refreshToken`. Informe o token de acesso no botão **Authorize** do Swagger ou envie `Authorization: Bearer <accessToken>` nas rotas protegidas.
 3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A criação, atualização e exclusão exigem `ROLE_ORGANIZER`. O organizador só pode alterar e excluir os próprios eventos. O cadastro público atribui `ROLE_CUSTOMER` (participante).
 
+### Login com Google
+
+Crie um cliente OAuth do tipo **Aplicativo da Web** no Google Cloud e inclua a origem do frontend em **Origens JavaScript autorizadas**. Para desenvolvimento, use `http://localhost:4200`. Defina o ID em `GOOGLE_CLIENT_ID` no `.env` e reinicie a API. O botão é exibido nas telas de login e cadastro quando o ID estiver configurado.
+
+No primeiro acesso com um e-mail Gmail ou Google Workspace verificado, a TicketWave cria uma conta de participante ou vincula a conta existente. Contas com privilégios ou e-mail de terceiros exigem a senha da TicketWave para o primeiro vínculo. Para um endereço de terceiros sem cadastro, crie a conta na TicketWave antes de vincular o Google. Os próximos acessos usam o identificador estável da conta Google.
+
 ### Recuperação de senha
 
 Na tela de login, selecione **Esqueci minha senha**. No desenvolvimento com Compose, abra a [caixa de entrada local do Mailpit](http://localhost:8025) para acessar o link. O link expira em 30 minutos e pode ser usado uma vez. Mantenha o frontend rodando na URL configurada em `FRONTEND_URL`.

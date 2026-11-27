@@ -3,10 +3,11 @@ import { Component, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { ViaCepApi } from '../api/via-cep-api';
 import { AuthSession } from './auth-session';
+import { GoogleSignIn } from './google-sign-in';
 
 @Component({
   selector: 'app-auth-page',
-  imports: [RouterLink],
+  imports: [RouterLink, GoogleSignIn],
   templateUrl: './auth-page.html',
   styleUrl: './auth-page.css',
 })

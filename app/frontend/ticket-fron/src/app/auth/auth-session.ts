@@ -26,7 +26,14 @@ export class AuthSession {
   }
 
   async login(email: string, password: string): Promise<void> {
-    const tokens = await this.api.login(email, password);
+    await this.startSession(await this.api.login(email, password));
+  }
+
+  async loginWithGoogle(credential: string, password?: string): Promise<void> {
+    await this.startSession(await this.api.loginWithGoogle(credential, password));
+  }
+
+  private async startSession(tokens: Tokens): Promise<void> {
     const profile = await this.api.getProfile(tokens.accessToken);
     this.profile.set(profile);
     this.notice.set('');

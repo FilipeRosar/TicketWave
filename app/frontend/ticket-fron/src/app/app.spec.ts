@@ -3,7 +3,9 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { GoogleSignInSdkLoader } from './api/google-sign-in-sdk';
 import { routes } from './app.routes';
+import type { GoogleSignInSdk } from './interfaces/google-sign-in';
 import { AuthSession } from './auth/auth-session';
 
 describe('Navegação do TicketWave', () => {
@@ -89,6 +91,9 @@ describe('Navegação do TicketWave', () => {
     expect(TestBed.inject(Router).url).toBe('/entrar');
     expect(harness.routeNativeElement?.querySelector('[role="status"]')?.textContent).toContain('Conta criada');
     expect(harness.routeNativeElement?.querySelector<HTMLInputElement>('#email')?.value).toBe(fields.email);
+    for (const challenge of http.match('/v1/api/auth/google/challenge')) {
+      challenge.flush(null, { status: 204, statusText: 'No Content' });
+    }
     http.verify();
   });
 
@@ -156,6 +161,9 @@ describe('Navegação do TicketWave', () => {
     harness.detectChanges();
     expect(view.textContent).toContain('Perfil excluído.');
     expect(view.textContent).toContain('Sair da conta');
+    for (const challenge of http.match('/v1/api/auth/google/challenge')) {
+      challenge.flush(null, { status: 204, statusText: 'No Content' });
+    }
     http.verify();
   });
 
@@ -194,6 +202,53 @@ describe('Navegação do TicketWave', () => {
     await harness.fixture.whenStable();
     expect(router.url).toBe('/entrar');
     expect(harness.routeNativeElement?.querySelector('[role="status"]')?.textContent).toContain('Senha atualizada');
+    for (const challenge of http.match('/v1/api/auth/google/challenge')) {
+      challenge.flush(null, { status: 204, statusText: 'No Content' });
+    }
+    http.verify();
+  });
+
+  it('vincula o Google e inicia a sessão da TicketWave', async () => {
+    let receiveCredential!: Parameters<GoogleSignInSdk['initialize']>[0]['callback'];
+    const sdk: GoogleSignInSdk = {
+      initialize: options => {
+        expect(options.client_id).toBe('test.apps.googleusercontent.com');
+        expect(options.nonce).toBe('a'.repeat(43));
+        receiveCredential = options.callback;
+      },
+      renderButton: container => { container.textContent = 'Entrar com Google'; },
+    };
+    vi.spyOn(TestBed.inject(GoogleSignInSdkLoader), 'load').mockResolvedValue(sdk);
+    const harness = await RouterTestingHarness.create('/entrar');
+    const http = TestBed.inject(HttpTestingController);
+    const path = '/v1/api/auth/google';
+    http.expectOne(path + '/challenge').flush({ clientId: 'test.apps.googleusercontent.com', nonce: 'a'.repeat(43) });
+    await Promise.resolve();
+    await Promise.resolve();
+    harness.detectChanges();
+    expect(harness.routeNativeElement?.textContent).toContain('Entrar com Google');
+
+    receiveCredential({ credential: 'credential-from-google' });
+    const first = http.expectOne(path);
+    expect(first.request.body.credential).toBe('credential-from-google');
+    first.flush({}, { status: 428, statusText: 'Precondition Required' });
+    await Promise.resolve();
+    await Promise.resolve();
+    harness.detectChanges();
+
+    const password = harness.routeNativeElement!.querySelector<HTMLInputElement>('#google-link-password')!;
+    password.value = 'minha-senha';
+    password.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const confirmation = http.expectOne(path);
+    expect(confirmation.request.body).toEqual({ credential: 'credential-from-google', password: 'minha-senha' });
+    confirmation.flush({ accessToken: 'access', refreshToken: 'refresh', expiresIn: 3600000 });
+    await Promise.resolve();
+    const profile = http.expectOne('/v1/api/auth/me');
+    expect(profile.request.headers.get('Authorization')).toBe('Bearer access');
+    profile.flush({ name: 'Pessoa Teste', email: 'teste@example.test', role: 'ROLE_CUSTOMER' });
+    await harness.fixture.whenStable();
+    expect(TestBed.inject(Router).url).toBe('/');
+    expect(TestBed.inject(AuthSession).user()?.name).toBe('Pessoa Teste');
     http.verify();
   });
 });

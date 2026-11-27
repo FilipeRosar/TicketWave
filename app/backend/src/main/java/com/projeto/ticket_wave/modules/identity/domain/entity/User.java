@@ -16,6 +16,8 @@ public class User extends BaseEntity {
 
     private String email;
 
+    private String googleSubject;
+
     private String password;
 
     private Role role;
