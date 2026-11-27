@@ -158,4 +158,42 @@ describe('Navegação do TicketWave', () => {
     expect(view.textContent).toContain('Sair da conta');
     http.verify();
   });
+
+  it('solicita a recuperação e redefine a senha pelo token do link', async () => {
+    const harness = await RouterTestingHarness.create('/entrar');
+    const http = TestBed.inject(HttpTestingController);
+    const router = TestBed.inject(Router);
+    harness.routeNativeElement!.querySelector<HTMLAnchorElement>('a[href="/esqueci-minha-senha"]')!.click();
+    await harness.fixture.whenStable();
+    expect(router.url).toBe('/esqueci-minha-senha');
+
+    let form = harness.routeNativeElement!.querySelector('form')!;
+    (form.elements.namedItem('email') as HTMLInputElement).value = 'teste@example.test';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const request = http.expectOne('/v1/api/auth/forgot-password');
+    expect(request.request.body).toEqual({ email: 'teste@example.test' });
+    request.flush(null, { status: 202, statusText: 'Accepted' });
+    await Promise.resolve();
+    harness.detectChanges();
+    expect(harness.routeNativeElement?.querySelector('[role="status"]')?.textContent).toContain('Se o e-mail estiver cadastrado');
+
+    const token = 'a'.repeat(43);
+    await harness.navigateByUrl('/redefinir-senha#' + token);
+    form = harness.routeNativeElement!.querySelector('form')!;
+    (form.elements.namedItem('password') as HTMLInputElement).value = 'nova-senha';
+    const confirmation = form.elements.namedItem('passwordConfirmation') as HTMLInputElement;
+    confirmation.value = 'senha-diferente';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    http.expectNone('/v1/api/auth/reset-password');
+
+    confirmation.value = 'nova-senha';
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const reset = http.expectOne('/v1/api/auth/reset-password');
+    expect(reset.request.body).toEqual({ token, password: 'nova-senha', passwordConfirmation: 'nova-senha' });
+    reset.flush(null, { status: 204, statusText: 'No Content' });
+    await harness.fixture.whenStable();
+    expect(router.url).toBe('/entrar');
+    expect(harness.routeNativeElement?.querySelector('[role="status"]')?.textContent).toContain('Senha atualizada');
+    http.verify();
+  });
 });

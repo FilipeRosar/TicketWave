@@ -22,3 +22,9 @@ export interface Registration {
   passwordConfirmation: string;
   address: RegistrationAddress;
 }
+
+export interface PasswordReset {
+  token: string;
+  password: string;
+  passwordConfirmation: string;
+}

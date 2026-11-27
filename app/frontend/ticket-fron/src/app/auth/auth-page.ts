@@ -113,6 +113,8 @@ export class AuthPage {
     }
   }
 
+  protected readonly passwordReset = this.registration?.['passwordReset'] === true;
+
   protected get registered(): boolean {
     return this.registration?.['registered'] === true;
   }

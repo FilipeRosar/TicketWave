@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import type { Profile, Registration, Tokens } from '../interfaces/auth';
+import type { PasswordReset, Profile, Registration, Tokens } from '../interfaces/auth';
 
 const authUrl = '/v1/api/auth';
 
@@ -11,6 +11,14 @@ export class AuthApi {
 
   register(details: Registration): Promise<void> {
     return firstValueFrom(this.http.post<void>(authUrl + '/register', details));
+  }
+
+  forgotPassword(email: string): Promise<void> {
+    return firstValueFrom(this.http.post<void>(authUrl + '/forgot-password', { email }));
+  }
+
+  resetPassword(request: PasswordReset): Promise<void> {
+    return firstValueFrom(this.http.post<void>(authUrl + '/reset-password', request));
   }
 
   login(email: string, password: string): Promise<Tokens> {

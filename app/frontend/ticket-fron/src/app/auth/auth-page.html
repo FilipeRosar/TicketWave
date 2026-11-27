@@ -18,7 +18,9 @@
     <div class="form-content">
       <h1 id="auth-title">{{ registering ? 'Crie sua conta.' : 'Entre na sua conta.' }}</h1>
       <p class="intro">{{ registering ? 'Cadastre seus dados para começar.' : 'Acesse seu perfil na TicketWave.' }}</p>
-      @if (registered) {
+      @if (passwordReset) {
+        <p role="status" class="notice">Senha atualizada. Entre com a nova senha.</p>
+      } @else if (registered) {
         <p role="status" class="notice">Conta criada. Entre com sua senha.</p>
       } @else if (session.sessionNotice()) {
         <p role="status" class="notice">{{ session.sessionNotice() }}</p>
@@ -85,6 +87,9 @@
             <input id="state" name="state" autocomplete="address-level1" autocapitalize="characters"
               required maxlength="2" pattern="[A-Za-z]{2}">
           </fieldset>
+        }
+        @if (!registering) {
+          <a class="back-link" routerLink="/esqueci-minha-senha">Esqueci minha senha</a>
         }
         <button class="primary" type="submit" [disabled]="busy() || lookingUpZipCode()">
           {{ busy() ? 'Aguarde…' : registering ? 'Criar minha conta' : 'Entrar' }}

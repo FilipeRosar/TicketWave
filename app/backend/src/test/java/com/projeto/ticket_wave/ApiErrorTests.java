@@ -11,6 +11,7 @@ import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.CustomUserDetails;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.JwtService;
+import jakarta.persistence.EntityManager;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.RequestDispatcher;
 import org.junit.jupiter.api.Test;
@@ -21,19 +22,31 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Base64;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+
+import org.mockito.ArgumentCaptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -60,6 +73,15 @@ class ApiErrorTests {
 
     @Autowired
     private ObjectMapper json;
+
+    @Autowired
+    private EntityManager entityManager;
+
+    @Autowired
+    private TransactionTemplate transactions;
+
+    @MockitoBean
+    private JavaMailSender mail;
 
     @Autowired
     private CategoryJpaRepository categories;
@@ -369,6 +391,88 @@ class ApiErrorTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.goals").isEmpty());
         mvc.perform(get(suggestionsPath).header(HttpHeaders.AUTHORIZATION, viewer))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void passwordResetEmailExpiresAndTokenCanOnlyBeConsumedOnce() throws Exception {
+        String auth = "/v1/api/auth";
+        String email = "password-reset@example.test";
+        String registration = """
+                {"name":"Pessoa Teste","email":"password-reset@example.test","password":"old-password","phone":"11999997210",
+                 "birthDate":"1995-04-20","cpf":"153.509.460-56","passwordConfirmation":"old-password",
+                 "address":{"zipCode":"01001-000","street":"Praça da Sé","number":"S/N","district":"Sé","city":"São Paulo","state":"SP"}}
+                """;
+        mvc.perform(post(auth + "/register").contentType(MediaType.APPLICATION_JSON).content(registration))
+                .andExpect(status().isOk());
+        String originalLogin = json.createObjectNode().put("email", email).put("password", "old-password").toString();
+        String loginBody = mvc.perform(post(auth + "/login").contentType(MediaType.APPLICATION_JSON).content(originalLogin))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String refresh = json.createObjectNode().put("refreshToken", json.readTree(loginBody).get("refreshToken").asText()).toString();
+
+        String requestPath = auth + "/forgot-password";
+        String resetPath = auth + "/reset-password";
+        String recovery = json.createObjectNode().put("email", email).toString();
+        mvc.perform(post(requestPath).contentType(MediaType.APPLICATION_JSON)
+                .content(recovery.replace(email, "unknown@example.test")))
+                .andExpect(status().isAccepted()).andExpect(content().string(""));
+        mvc.perform(post(requestPath).contentType(MediaType.APPLICATION_JSON).content(recovery))
+                .andExpect(status().isAccepted()).andExpect(content().string(""));
+
+        var messages = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mail, timeout(5000)).send(messages.capture());
+        assertThat(messages.getValue().getTo()).containsExactly(email);
+        String expired = resetTokenFrom(messages.getValue());
+        assertThat(expired).matches("[A-Za-z0-9_-]{43}");
+        UUID userId = users.findByEmail(email).orElseThrow().getId();
+        transactions.executeWithoutResult(transaction -> {
+            String hash = entityManager.createQuery("""
+                    SELECT token.tokenHash FROM PasswordResetTokenJpaEntity token WHERE token.userId = :id
+                    """, String.class).setParameter("id", userId).getSingleResult();
+            assertThat(hash).hasSize(64).isNotEqualTo(expired);
+            entityManager.createQuery("""
+                    UPDATE PasswordResetTokenJpaEntity token SET token.expiresAt = :expiredAt WHERE token.userId = :id
+                    """).setParameter("expiredAt", Instant.now().minusSeconds(1)).setParameter("id", userId).executeUpdate();
+        });
+        expectError(mvc.perform(post(resetPath).contentType(MediaType.APPLICATION_JSON)
+                .content(resetBody(expired, "new-password"))), 400, resetPath);
+
+        mvc.perform(post(requestPath).contentType(MediaType.APPLICATION_JSON).content(recovery))
+                .andExpect(status().isAccepted());
+        var delivered = ArgumentCaptor.forClass(SimpleMailMessage.class);
+        verify(mail, timeout(5000).times(2)).send(delivered.capture());
+        String valid = resetTokenFrom(delivered.getValue());
+        assertThat(valid).isNotEqualTo(expired);
+        expectError(mvc.perform(post(resetPath).contentType(MediaType.APPLICATION_JSON)
+                .content(json.createObjectNode().put("token", valid).put("password", "new-password")
+                        .put("passwordConfirmation", "wrong-password").toString())), 400, resetPath);
+
+        String reset = resetBody(valid, "new-password");
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> mvc.perform(post(resetPath).contentType(MediaType.APPLICATION_JSON).content(reset))
+                    .andReturn().getResponse().getStatus());
+            var second = executor.submit(() -> mvc.perform(post(resetPath).contentType(MediaType.APPLICATION_JSON).content(reset))
+                    .andReturn().getResponse().getStatus());
+            assertThat(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(204, 400);
+        }
+        expectError(mvc.perform(post(auth + "/login").contentType(MediaType.APPLICATION_JSON).content(originalLogin)),
+                401, auth + "/login");
+        expectError(mvc.perform(post(auth + "/refresh").contentType(MediaType.APPLICATION_JSON).content(refresh)),
+                401, auth + "/refresh");
+        mvc.perform(post(auth + "/login").contentType(MediaType.APPLICATION_JSON)
+                .content(originalLogin.replace("old-password", "new-password")))
+                .andExpect(status().isOk());
+    }
+
+    private String resetTokenFrom(SimpleMailMessage message) {
+        return message.getText().lines()
+                .filter(line -> line.contains("/redefinir-senha#")).findFirst().orElseThrow()
+                .split("#", 2)[1];
+    }
+
+    private String resetBody(String token, String password) {
+        return json.createObjectNode().put("token", token).put("password", password)
+                .put("passwordConfirmation", password).toString();
     }
 
     private String bearerFor(String email, String phone, Role role) {

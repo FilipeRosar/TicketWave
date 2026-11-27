@@ -45,6 +45,12 @@ docker compose down
 2. Use `POST /v1/api/auth/login` para obter `accessToken` e `refreshToken`. Informe o token de acesso no botão **Authorize** do Swagger ou envie `Authorization: Bearer <accessToken>` nas rotas protegidas.
 3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A criação, atualização e exclusão exigem `ROLE_ORGANIZER`. O organizador só pode alterar e excluir os próprios eventos. O cadastro público atribui `ROLE_CUSTOMER` (participante).
 
+### Recuperação de senha
+
+Na tela de login, selecione **Esqueci minha senha**. No desenvolvimento com Compose, abra a [caixa de entrada local do Mailpit](http://localhost:8025) para acessar o link. O link expira em 30 minutos e pode ser usado uma vez. Mantenha o frontend rodando na URL configurada em `FRONTEND_URL`.
+
+Para usar um servidor SMTP externo, configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_FROM` e, conforme seu provedor, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_AUTH` e `SMTP_STARTTLS` no ambiente. Use a URL HTTPS do frontend no ambiente publicado.
+
 ### Perfil do participante
 
 Em **Minha conta**, participantes podem criar, visualizar, editar e excluir seu próprio perfil.
