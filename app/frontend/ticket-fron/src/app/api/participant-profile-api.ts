@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
-import type { ParticipantProfile } from '../interfaces/participant-profile';
+import type { ConnectionSuggestion, ParticipantProfile } from '../interfaces/participant-profile';
 
 const profileUrl = '/v1/api/profile/me';
 
@@ -11,6 +11,10 @@ export class ParticipantProfileApi {
 
   get(accessToken: string): Promise<ParticipantProfile> {
     return firstValueFrom(this.http.get<ParticipantProfile>(profileUrl, this.authorization(accessToken)));
+  }
+
+  suggestions(accessToken: string): Promise<ConnectionSuggestion[]> {
+    return firstValueFrom(this.http.get<ConnectionSuggestion[]>(profileUrl + '/suggestions', this.authorization(accessToken)));
   }
 
   save(accessToken: string, data: FormData): Promise<ParticipantProfile> {

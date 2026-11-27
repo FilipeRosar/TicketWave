@@ -4,17 +4,17 @@
       <img src="assets/home/mark.png" alt="" width="34" height="34">
       <span>Ticket<span>Wave</span></span>
     </a>
-    <a class="explore" routerLink="/">Explorar eventos <span aria-hidden="true">↗</span></a>
+    <div class="header-actions">
+      @if (session.user()) { <app-theme-toggle /> }
+      <a class="explore" routerLink="/">Explorar eventos <span aria-hidden="true">↗</span></a>
+    </div>
   </nav>
 </header>
 
 <main class="account" aria-labelledby="account-title">
   <h1 id="account-title">Minha conta</h1>
   @if (session.user(); as user) {
-    <div class="account-grid" [class.single-column]="user.role !== 'ROLE_CUSTOMER'">
-      @if (user.role === 'ROLE_CUSTOMER') {
-        <app-participant-profile [accountName]="user.name" />
-      }
+    <ng-template #accountPanel>
       <aside class="panel" aria-labelledby="account-details">
         <h2 id="account-details">Dados da conta</h2>
         <dl>
@@ -28,7 +28,14 @@
         </button>
         @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
       </aside>
-    </div>
+    </ng-template>
+    @if (user.role === 'ROLE_CUSTOMER') {
+      <app-participant-profile [accountName]="user.name">
+        <ng-container [ngTemplateOutlet]="accountPanel" />
+      </app-participant-profile>
+    } @else {
+      <div class="account-only"><ng-container [ngTemplateOutlet]="accountPanel" /></div>
+    }
   } @else {
     <section class="panel signed-out">
       <p role="status">{{ session.sessionNotice() || 'Entre para acessar sua conta.' }}</p>

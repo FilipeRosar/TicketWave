@@ -1,12 +1,14 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
+import { ThemeToggle } from '../theme/theme-toggle';
 import { AuthSession } from '../auth/auth-session';
 import { ParticipantProfilePage } from '../profile/participant-profile-page';
 
 @Component({
   selector: 'app-account-page',
-  imports: [RouterLink, ParticipantProfilePage],
+  imports: [NgTemplateOutlet, RouterLink, ParticipantProfilePage, ThemeToggle],
   templateUrl: './account-page.html',
   styleUrl: './account-page.css',
 })

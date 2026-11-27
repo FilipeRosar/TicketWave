@@ -327,6 +327,50 @@ class ApiErrorTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.email").value("profile@example.test"));
     }
 
+    @Test
+    @Transactional
+    void suggestsConnectionsBySharedInterestsAndCompatibleGoals() throws Exception {
+        String path = "/v1/api/profile/me";
+        String viewer = bearerFor("suggestions@example.test", "11999994101", Role.ROLE_CUSTOMER);
+        String bestMatch = bearerFor("best-match@example.test", "11999994102", Role.ROLE_CUSTOMER);
+        String goalMatch = bearerFor("goal-match@example.test", "11999994103", Role.ROLE_CUSTOMER);
+        String noMatch = bearerFor("no-match@example.test", "11999994104", Role.ROLE_CUSTOMER);
+        String suggestionsPath = path + "/suggestions";
+        expectError(mvc.perform(get(suggestionsPath)), 401, suggestionsPath);
+
+        mvc.perform(multipart(HttpMethod.PUT, path).header(HttpHeaders.AUTHORIZATION, viewer)
+                .param("name", "Meu perfil").param("interests", " Design ", "design", "Música")
+                .param("goals", "HIRE", "PARTNERSHIP"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.interests[0]").value("design"))
+                .andExpect(jsonPath("$.interests[1]").value("música"))
+                .andExpect(jsonPath("$.interests.length()").value(2));
+        mvc.perform(multipart(HttpMethod.PUT, path).header(HttpHeaders.AUTHORIZATION, bestMatch)
+                .param("name", "Ana").param("interests", "DESIGN", "música")
+                .param("goals", "GET_HIRED"))
+                .andExpect(status().isOk());
+        mvc.perform(multipart(HttpMethod.PUT, path).header(HttpHeaders.AUTHORIZATION, goalMatch)
+                .param("name", "Bruna").param("goals", "PARTNERSHIP"))
+                .andExpect(status().isOk());
+        mvc.perform(multipart(HttpMethod.PUT, path).header(HttpHeaders.AUTHORIZATION, noMatch)
+                .param("name", "Caio").param("goals", "HIRE"))
+                .andExpect(status().isOk());
+        mvc.perform(get(suggestionsPath).header(HttpHeaders.AUTHORIZATION, viewer))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].name").value("Ana"))
+                .andExpect(jsonPath("$[0].sharedInterests.length()").value(2))
+                .andExpect(jsonPath("$[0].matchedGoals[0]").value("GET_HIRED"))
+                .andExpect(jsonPath("$[1].name").value("Bruna"))
+                .andExpect(jsonPath("$[1].matchedGoals[0]").value("PARTNERSHIP"));
+
+        mvc.perform(multipart(HttpMethod.PUT, path).header(HttpHeaders.AUTHORIZATION, viewer)
+                .param("name", "Meu perfil"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.goals").isEmpty());
+        mvc.perform(get(suggestionsPath).header(HttpHeaders.AUTHORIZATION, viewer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+    }
+
     private String bearerFor(String email, String phone, Role role) {
         User user = new User();
         user.setName("Test user");

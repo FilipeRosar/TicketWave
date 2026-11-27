@@ -1,5 +1,6 @@
 package com.projeto.ticket_wave.modules.identity.application.service;
 
+import com.projeto.ticket_wave.modules.identity.application.dto.ConnectionSuggestion;
 import com.projeto.ticket_wave.modules.identity.application.dto.ParticipantProfile;
 import com.projeto.ticket_wave.modules.identity.application.dto.UpdateParticipantProfile;
 import com.projeto.ticket_wave.modules.identity.application.port.CurrentUser;
@@ -13,6 +14,8 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.imageio.ImageIO;
 import javax.imageio.stream.MemoryCacheImageInputStream;
 import java.io.IOException;
+import java.text.Normalizer;
+import java.util.List;
 import java.util.Locale;
 
 @Service
@@ -48,8 +51,16 @@ public class ParticipantProfileService {
         }
         var profile = new ParticipantProfile(
                 request.name().strip(), clean(request.occupation()), clean(request.city()),
-                clean(request.bio()), photoType, photo);
+                clean(request.bio()), photoType, photo,
+                request.interests() == null ? List.of() : request.interests().stream()
+                        .map(interest -> Normalizer.normalize(interest.strip().toLowerCase(Locale.ROOT), Normalizer.Form.NFC))
+                        .distinct().toList(),
+                request.goals() == null ? List.of() : request.goals().stream().map(Enum::name).distinct().toList());
         return profiles.save(currentUser.getCurrentUser().getId(), profile, hasPhoto || removePhoto);
+    }
+
+    public List<ConnectionSuggestion> suggestions() {
+        return profiles.findSuggestions(currentUser.getCurrentUser().getId());
     }
 
     public void delete() {

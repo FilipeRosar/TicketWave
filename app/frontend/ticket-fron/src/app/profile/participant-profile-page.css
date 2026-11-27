@@ -1,22 +1,13 @@
-:host { display: block; min-width: 0; --line: #dfe7f2; --muted: #53647d; --accent: #283bd0; }
-.profile-card, .panel { background: white; border: 1px solid var(--line); border-radius: 18px; }
-.profile-card { overflow: hidden; }
-.cover { height: clamp(128px, 22vw, 220px); background: #bedcf0
-  linear-gradient(105deg, #182c7350, transparent 75%); position: relative; }
-.cover::before { content: ''; position: absolute; inset: 0; background:
-  linear-gradient(105deg, #182c734a, transparent 75%), url('/assets/home/festival-day.webp') center 84% / cover; }
-.identity { position: relative; padding: 0 26px 25px; }
-.identity-bar, .empty { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.identity-bar { min-height: 64px; }
+:host { display: block; min-width: 0; --line: #dfe7f2; --muted: #53647d; --accent: #2348c6; }
+.panel { background: white; border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 8px 24px #17255406; }
+.empty { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .avatar { display: grid; place-items: center; flex: none; overflow: hidden; border-radius: 50%; background: #e3eaff; color: #2337a4; font-weight: 800; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
-.main-avatar { width: 106px; height: 106px; margin-top: -48px; border: 5px solid white; font-size: 1.85rem; }
-.identity h2 { margin: 3px 0 0; font-size: clamp(1.45rem, 4vw, 2.12rem); font-weight: 850; letter-spacing: -.045em; overflow-wrap: anywhere; }
 .metadata { display: flex; flex-wrap: wrap; gap: 0 8px; margin: 4px 0 0; color: var(--muted); }
-.panel { margin-top: 16px; padding: 23px 26px; }
+.panel { padding: clamp(18px, 3vw, 27px); }
 h3 { margin: 0 0 5px; font-size: 1.16rem; font-weight: 800; letter-spacing: -.022em; }
 .panel-heading p, .empty p, .muted { margin: 0; color: var(--muted); }
-.bio { white-space: pre-wrap; overflow-wrap: anywhere; margin-block: 8px; }
+.bio { white-space: pre-wrap; overflow-wrap: anywhere; margin: 9px 0 0; }
 fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .photo-picker { display: flex; align-items: center; gap: 15px; margin-block: 18px; padding: 14px; border: 1px dashed #c8d5ea; border-radius: 13px; background: #f7faff; }
 .edit-avatar { width: 70px; height: 70px; font-size: 1.3rem; }
@@ -28,7 +19,7 @@ fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .fields label { display: grid; gap: 6px; min-width: 0; }
 .wide { grid-column: 1 / -1; }
 .fields label, .field-label { font-size: .88rem; font-weight: 700; }
-.fields input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #c9d5e8; border-radius: 9px; background: white; color: #17233b; font-weight: 400; }
+.fields input, .preferences > input, textarea { width: 100%; padding: 10px 12px; border: 1px solid #c9d5e8; border-radius: 11px; background: #f9fbff; color: #17233b; font-weight: 400; }
 textarea { resize: vertical; }
 .check { display: flex; align-items: center; gap: 7px; font-size: .85rem; }
 .actions { display: flex; flex-wrap: wrap; justify-content: end; gap: 8px; margin-top: 18px; }
@@ -38,17 +29,17 @@ textarea { resize: vertical; }
 .primary:hover { background: #1c2aaa; }
 .secondary { background: white; color: #314568; }
 .secondary:hover { background: #ecf2fc; }
-.feedback { margin-top: 14px; padding: 10px 14px; border-radius: 10px; background: white; }
+.feedback { margin: 0; padding: 10px 14px; border-radius: 10px; background: white; }
 .success { color: #176148; background: #e9f8f0; }
 .error, .danger, .delete-link { color: #9b2639; }
 .error, .delete-confirm, .danger:hover { background: #fff0f2; }
-.delete-link { font-size: .84rem; margin-top: 12px; padding: 3px 0; cursor: pointer; }
+.delete-link { font-size: .84rem; padding: 3px 0; cursor: pointer; }
 .delete-link:hover { text-decoration: underline; }
-.delete-confirm { margin-top: 14px; padding: 14px; border-radius: 10px; }
+.delete-confirm { padding: 14px; border-radius: 10px; }
 @media (max-width: 540px) {
-  .identity, .panel { padding-inline: 17px; }
-  .main-avatar { width: 84px; height: 84px; margin-top: -37px; }
-  .identity-bar { min-height: 51px; }
   .fields { grid-template-columns: 1fr; }
   .empty { align-items: flex-start; flex-direction: column; }
 }
+
+.profile-actions { padding-inline: 3px; }
+.panel-heading { padding-bottom: 14px; border-bottom: 1px solid var(--line); }

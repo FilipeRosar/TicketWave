@@ -1,18 +1,23 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { afterNextRender, Component, computed, DestroyRef, ElementRef, inject, Injector, input, OnInit, signal, viewChild } from '@angular/core';
 import { AuthSession } from '../auth/auth-session';
-import type { ParticipantProfile } from '../interfaces/participant-profile';
+import { connectionGoals, type ConnectionGoal, type ConnectionSuggestion, type ParticipantProfile } from '../interfaces/participant-profile';
 
 @Component({
   selector: 'app-participant-profile',
   templateUrl: './participant-profile-page.html',
-  styleUrl: './participant-profile-page.css',
+  styleUrls: ['./participant-profile-page.css', './profile-cover.css', './profile-preferences.css', './profile-dark.css'],
 })
 export class ParticipantProfilePage implements OnInit {
   private readonly session = inject(AuthSession);
   private readonly injector = inject(Injector);
   private readonly editorTitle = viewChild<ElementRef<HTMLHeadingElement>>('editorTitle');
   readonly accountName = input.required<string>();
+  private suggestionRequest = 0;
+  protected readonly goalLabels = connectionGoals;
+  protected readonly goals = Object.keys(connectionGoals) as ConnectionGoal[];
+  protected readonly suggestions = signal<ConnectionSuggestion[] | null>(null);
+  protected readonly suggestionError = signal(false);
   protected readonly profile = signal<ParticipantProfile | null>(null);
   protected readonly loaded = signal(false);
   protected readonly editing = signal(false);
@@ -48,12 +53,25 @@ export class ParticipantProfilePage implements OnInit {
     try {
       this.profile.set(await this.session.getParticipantProfile());
       this.loaded.set(true);
+      void this.loadSuggestions();
     } catch (error) {
       if (error instanceof HttpErrorResponse && error.status === 404) {
         this.loaded.set(true);
       } else {
         this.showError(error);
       }
+    }
+  }
+
+  protected async loadSuggestions(): Promise<void> {
+    const request = ++this.suggestionRequest;
+    this.suggestions.set(null);
+    this.suggestionError.set(false);
+    try {
+      const suggestions = await this.session.getConnectionSuggestions();
+      if (request === this.suggestionRequest) this.suggestions.set(suggestions);
+    } catch {
+      if (request === this.suggestionRequest) this.suggestionError.set(true);
     }
   }
 
@@ -100,6 +118,15 @@ export class ParticipantProfilePage implements OnInit {
     if (this.busy()) return;
 
     const data = new FormData(form);
+    const interests = [...new Set(String(data.get('interestList') ?? '').split(',')
+      .map(interest => interest.trim().normalize('NFC').toLocaleLowerCase('pt-BR'))
+      .filter(Boolean))];
+    if (interests.length > 10 || interests.some(interest => interest.length > 40)) {
+      this.error.set('Adicione até 10 interesses com no máximo 40 caracteres cada.');
+      return;
+    }
+    data.delete('interestList');
+    for (const interest of interests) data.append('interests', interest);
     const photo = data.get('photo');
     if (photo instanceof File && photo.size > 1024 * 1024) {
       this.error.set('A foto deve ter até 1 MB.');
@@ -113,6 +140,7 @@ export class ParticipantProfilePage implements OnInit {
       this.profile.set(await this.session.saveParticipantProfile(data));
       this.cancelEditing();
       this.status.set('Perfil salvo.');
+      void this.loadSuggestions();
     } catch (error) {
       this.showError(error);
     } finally {
@@ -128,6 +156,8 @@ export class ParticipantProfilePage implements OnInit {
     try {
       await this.session.deleteParticipantProfile();
       this.profile.set(null);
+      this.suggestionRequest++;
+      this.suggestions.set(null);
       this.confirmingDelete.set(false);
       this.status.set('Perfil excluído.');
     } catch (error) {

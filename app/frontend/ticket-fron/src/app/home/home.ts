@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { ThemeToggle } from '../theme/theme-toggle';
 import { AuthSession } from '../auth/auth-session';
 import type { CatalogEvent } from '../interfaces/catalog-event';
 
@@ -39,8 +40,8 @@ function normalize(text: string): string {
 
 @Component({
   selector: 'app-home',
-  imports: [RouterLink],
-  styleUrl: './home.css',
+  imports: [RouterLink, ThemeToggle],
+  styleUrls: ['./home.css', './home-dark.css'],
   templateUrl: './home.html',
 })
 export class Home {

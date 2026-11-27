@@ -23,3 +23,24 @@ button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 :focus-visible { outline: 3px solid var(--wave-steel); outline-offset: 4px; }
 a { color: inherit; text-decoration: none; }
+
+app-root { display: block; min-height: 100svh; }
+:root:has(app-root[data-theme='dark']) { background: #0c1322; color-scheme: dark; }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+app-root[data-theme='dark'] {
+  color-scheme: dark;
+  color: #edf3ff;
+  background: #0c1322;
+  --wave-blue: #3459df;
+  --wave-navy: #233da7;
+  --wave-steel: #93afff;
+  --wave-teal: #58ddce;
+  --wave-ink: #edf3ff;
+  --wave-muted: #aebdd6;
+  --wave-line: #31415d;
+  --wave-mist: #1c2a42;
+  --wave-surface: #151f33;
+  --dark-field: #101a2d;
+  --dark-link: #aac0ff;
+  --dark-danger: #ffa9b7;
+}

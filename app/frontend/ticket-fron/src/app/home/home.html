@@ -9,9 +9,12 @@
       <a href="#sobre">Sobre</a>
       <a href="#duvidas">Dúvidas</a>
     </nav>
-    <a class="button button-outline" [routerLink]="session.user() ? '/conta' : '/entrar'">
-      {{ session.user() ? 'Minha conta' : 'Entrar' }}
-    </a>
+    <div class="header-actions">
+      @if (session.user()) { <app-theme-toggle /> }
+      <a class="button button-outline" [routerLink]="session.user() ? '/conta' : '/entrar'">
+        {{ session.user() ? 'Minha conta' : 'Entrar' }}
+      </a>
+    </div>
   </div>
 </header>
 

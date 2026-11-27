@@ -51,6 +51,8 @@ Em **Minha conta**, participantes podem criar, visualizar, editar e excluir seu 
 A API disponibiliza `GET`, `PUT` e `DELETE` em `/v1/api/profile/me`.
 Envie os campos `name`, `occupation`, `city`, `bio` e a foto opcional `photo` via `multipart/form-data` no `PUT`.
 Use `removePhoto=true` para remover uma foto existente. A exclusão apaga o perfil e preserva a conta.
+O perfil aceita até dez tags em `interests` e objetivos em `goals`, enviados como campos repetidos.
+`GET /v1/api/profile/me/suggestions` sugere participantes ativos por interesses iguais e objetivos compatíveis, como contratar e ser contratado.
 
 ### Usar a home Angular
 

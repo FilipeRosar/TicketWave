@@ -122,3 +122,8 @@ dialog::backdrop { background: #030f35ac; }
   .footer-content { flex-wrap: wrap; padding-block: 18px; }
   .footer-content nav { gap: 15px; flex-wrap: wrap; }
 }
+
+@media (max-width: 375px) {
+  .header-content { gap: 8px; }
+  .header-content .button-outline { padding-inline: 10px; }
+}

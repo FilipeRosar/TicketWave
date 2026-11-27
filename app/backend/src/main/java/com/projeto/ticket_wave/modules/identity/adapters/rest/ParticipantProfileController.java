@@ -1,5 +1,6 @@
 package com.projeto.ticket_wave.modules.identity.adapters.rest;
 
+import com.projeto.ticket_wave.modules.identity.application.dto.ConnectionSuggestion;
 import com.projeto.ticket_wave.modules.identity.application.dto.ParticipantProfile;
 import com.projeto.ticket_wave.modules.identity.application.dto.UpdateParticipantProfile;
 import com.projeto.ticket_wave.modules.identity.application.service.ParticipantProfileService;
@@ -18,6 +19,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/v1/api/profile/me")
 @PreAuthorize("hasRole('CUSTOMER')")
@@ -28,6 +31,11 @@ public class ParticipantProfileController {
     @GetMapping
     public ResponseEntity<ParticipantProfile> get() {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(profiles.get());
+    }
+
+    @GetMapping("/suggestions")
+    public ResponseEntity<List<ConnectionSuggestion>> suggestions() {
+        return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(profiles.suggestions());
     }
 
     @PutMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

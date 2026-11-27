@@ -115,22 +115,37 @@ describe('Navegação do TicketWave', () => {
     const submit = (name: string) => {
       const form = view.querySelector('form')!;
       (form.elements.namedItem('name') as HTMLInputElement).value = name;
+      (form.elements.namedItem('interestList') as HTMLInputElement).value = 'Design, design, Música';
+      form.querySelector<HTMLInputElement>('input[value="HIRE"]')!.checked = true;
       form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       const request = http.expectOne({ url: path, method: 'PUT' });
       expect(request.request.headers.get('Authorization')).toBe('Bearer access');
       expect(request.request.body.get('name')).toBe(name);
-      request.flush({ name, occupation: 'Designer', city: 'São Paulo', bio: 'Gosto de shows.', photoType: null, photo: null });
+      expect(request.request.body.getAll('interests')).toEqual(['design', 'música']);
+      expect(request.request.body.getAll('goals')).toEqual(['HIRE']);
+      request.flush({
+        name, occupation: 'Designer', city: 'São Paulo', bio: 'Gosto de shows.', photoType: null, photo: null,
+        interests: ['design', 'música'], goals: ['HIRE'],
+      });
     };
 
     click('Criar perfil');
     submit('Perfil da pessoa');
     await Promise.resolve();
     harness.detectChanges();
+    http.expectOne(path + '/suggestions').flush([{
+      userId: 'another-participant', name: 'Ana', occupation: null, city: null,
+      sharedInterests: ['design'], matchedGoals: ['GET_HIRED'],
+    }]);
+    await Promise.resolve();
+    harness.detectChanges();
     expect(view.textContent).toContain('Gosto de shows.');
+    expect(view.querySelector('.suggestion-list')?.textContent).toContain('Ser contratado');
     click('Editar perfil');
     submit('Nome atualizado');
     await Promise.resolve();
     harness.detectChanges();
+    http.expectOne(path + '/suggestions').flush([]);
     expect(view.textContent).toContain('Nome atualizado');
 
     click('Excluir perfil');

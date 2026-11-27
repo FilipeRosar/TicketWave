@@ -37,6 +37,10 @@ export class AuthSession {
     return this.profiles.get(this.accessToken());
   }
 
+  getConnectionSuggestions() {
+    return this.profiles.suggestions(this.accessToken());
+  }
+
   saveParticipantProfile(data: FormData) {
     return this.profiles.save(this.accessToken(), data);
   }
