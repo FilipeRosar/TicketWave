@@ -29,7 +29,7 @@ public class EventController {
     }
     @GetMapping("/{id}")
     public ResponseEntity<EventResponse> getEventById(@PathVariable UUID id){
-        return ResponseEntity.ok(eventService.findById(id));
+        return ResponseEntity.ok(eventService.findVisibleById(id));
     }
     @GetMapping
     public ResponseEntity<Page<EventSummaryResponse>> getAllEvents(Pageable pageable){
@@ -37,8 +37,23 @@ public class EventController {
     }
     @GetMapping("/search")
     public ResponseEntity<Page<EventSummaryResponse>> search(EventSearchCriteria search, Pageable pageable){
-        return ResponseEntity.ok(eventService.search(search,pageable));
+        return ResponseEntity.ok(eventService.searchPublished(search, pageable));
     }
+    @GetMapping("/mine")
+    public Page<EventSummaryResponse> myEvents(Pageable pageable) {
+        return eventService.findMyEvents(pageable);
+    }
+
+    @PatchMapping("/{id}/publish")
+    public EventResponse publishEvent(@PathVariable UUID id) {
+        return eventService.publishEvent(id);
+    }
+
+    @PatchMapping("/{id}/cancel")
+    public EventResponse cancelEvent(@PathVariable UUID id) {
+        return eventService.cancelEvent(id);
+    }
+
     @PutMapping("/{id}")
     public ResponseEntity<EventResponse> updateEvent(@PathVariable UUID id,@Valid @RequestBody UpdateEventRequest dto){
         return ResponseEntity.ok(eventService.updateEvent(id,dto));

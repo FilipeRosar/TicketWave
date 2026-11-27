@@ -23,6 +23,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
@@ -78,8 +79,11 @@ public class EventService {
     public EventResponse updateEvent(UUID id, UpdateEventRequest request){
         Event event = findOwnedEvent(id);
 
+        event.requireEditable();
+        int previousCapacity = event.getCapacity();
         eventMapper.updateEvent(request, event);
         event.validateDates();
+        if (request.capacity() != null) event.updateCapacity(previousCapacity);
 
         if(request.categoryId() != null){
             Category category = categoryRepository.findById(request.categoryId())
@@ -93,6 +97,29 @@ public class EventService {
         }
         return eventMapper.toResponse(eventRepository.save(event));
     }
+    public EventResponse publishEvent(UUID id) {
+        Event event = findOwnedEvent(id);
+        if (event.isPublishedInCatalog()) return eventMapper.toResponse(event);
+        event.publish(LocalDateTime.now());
+        return eventMapper.toResponse(eventRepository.save(event));
+    }
+
+    public EventResponse cancelEvent(UUID id) {
+        Event event = findOwnedEvent(id);
+        if (event.getEventStatus() == EventStatus.CANCELLED) return eventMapper.toResponse(event);
+        event.cancel();
+        return eventMapper.toResponse(eventRepository.save(event));
+    }
+
+    public EventResponse findVisibleById(UUID id) {
+        Event event = findEntity(id);
+        if (!event.isPublishedInCatalog()
+                && !event.getOrganizer().getId().equals(currentUser.getCurrentUser().getId())) {
+            throw new NotFoundException("Evento não encontrado");
+        }
+        return eventMapper.toResponse(event);
+    }
+
     public EventResponse findById(UUID id){
         return eventMapper.toResponse(findEntity(id));
     }
@@ -111,12 +138,23 @@ public class EventService {
 
     @Transactional
     public void deleteEvent(UUID id){
-        eventRepository.delete(findOwnedEvent(id));
+        Event event = findOwnedEvent(id);
+        event.requireDeletable();
+        eventRepository.delete(event);
     }
 
     public Page<EventSummaryResponse> search(EventSearchCriteria search, Pageable pageable){
         return eventRepository.search(search, pageable)
                 .map(eventMapper::toSummary);
+    }
+
+    public Page<EventSummaryResponse> findMyEvents(Pageable pageable) {
+        return eventRepository.findByOrganizer(currentUser.getCurrentUser().getId(), pageable)
+                .map(eventMapper::toSummary);
+    }
+
+    public Page<EventSummaryResponse> searchPublished(EventSearchCriteria search, Pageable pageable) {
+        return eventRepository.searchPublished(search, pageable).map(eventMapper::toSummary);
     }
 
     private Event findOwnedEvent(UUID id) {

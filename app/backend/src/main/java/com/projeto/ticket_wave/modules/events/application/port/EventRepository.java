@@ -16,6 +16,10 @@ public interface EventRepository {
 
     Page<Event> findPublished(Pageable pageable);
 
+    Page<Event> findByOrganizer(UUID organizerId, Pageable pageable);
+
+    Page<Event> searchPublished(EventSearchCriteria criteria, Pageable pageable);
+
     Page<Event> search(EventSearchCriteria criteria, Pageable pageable);
 
     Event save(Event event);

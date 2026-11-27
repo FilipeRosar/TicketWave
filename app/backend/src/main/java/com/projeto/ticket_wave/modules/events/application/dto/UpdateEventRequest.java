@@ -3,6 +3,7 @@ package com.projeto.ticket_wave.modules.events.application.dto;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventType;
 
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -24,8 +25,10 @@ public record UpdateEventRequest(
         @Pattern(regexp = "(?s).*\\S.*", message = "não pode estar em branco")
         String description,
 
+        @Future
         LocalDateTime startDate,
 
+        @Future
         LocalDateTime endDate,
 
         @Positive

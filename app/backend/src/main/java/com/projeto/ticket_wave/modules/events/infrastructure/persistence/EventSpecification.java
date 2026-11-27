@@ -16,6 +16,11 @@ public class EventSpecification {
 
     private EventSpecification() {}
 
+    public static Specification<EventJpaEntity> published() {
+        Specification<EventJpaEntity> visible = (root, query, cb) -> cb.isTrue(root.get("published"));
+        return visible.and(statusEquals(EventStatus.PUBLISHED));
+    }
+
     public static Specification<EventJpaEntity> withFilters(EventSearchCriteria filters) {
         Specification<EventJpaEntity> spec = (root, query, cb) -> cb.conjunction();
 

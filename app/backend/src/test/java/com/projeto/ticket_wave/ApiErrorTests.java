@@ -37,6 +37,7 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
@@ -53,6 +54,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -282,28 +284,98 @@ class ApiErrorTests {
         venue.setAddress(address);
         String validEvent = event.replace("00000000-0000-0000-0000-000000000001", categories.save(category).getId().toString())
                 .replace("00000000-0000-0000-0000-000000000002", venues.save(venue).getId().toString());
+        expectError(mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validEvent.replace("2099-01-01T11:00:00", "2099-01-01T09:00:00"))), 400, eventPath);
+
         String created = mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
                 .contentType(MediaType.APPLICATION_JSON).content(validEvent))
-                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
-        String itemPath = eventPath + "/" + json.readTree(created).get("id").asText();
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eventStatus").value("DRAFT"))
+                .andExpect(jsonPath("$.published").value(false)).andReturn().getResponse().getContentAsString();
+        String id = json.readTree(created).get("id").asText();
+        String itemPath = eventPath + "/" + id;
+        String publishPath = itemPath + "/publish";
+        String cancelPath = itemPath + "/cancel";
+        String minePath = eventPath + "/mine";
+        String searchPath = eventPath + "/search";
 
         String participantToken = bearerFor("participant-role@example.test", "11999992222", Role.ROLE_CUSTOMER);
         String otherOrganizerToken = bearerFor("organizer-role@example.test", "11999993333", Role.ROLE_ORGANIZER);
-        mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, participantToken)).andExpect(status().isOk());
+        expectError(mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, participantToken)), 404, itemPath);
+        expectError(mvc.perform(get(minePath).header(HttpHeaders.AUTHORIZATION, participantToken)), 403, minePath);
+        mvc.perform(get(minePath).header(HttpHeaders.AUTHORIZATION, organizerToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(id));
+        mvc.perform(get(minePath).header(HttpHeaders.AUTHORIZATION, otherOrganizerToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content").isEmpty());
+        mvc.perform(get(searchPath).header(HttpHeaders.AUTHORIZATION, participantToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content").isEmpty());
+
         expectError(mvc.perform(put(itemPath).contentType(MediaType.APPLICATION_JSON).content("{}")), 401, itemPath);
         expectError(mvc.perform(delete(itemPath)), 401, itemPath);
-        for (String deniedToken : new String[]{ participantToken, adminToken, otherOrganizerToken }) {
+        expectError(mvc.perform(patch(publishPath)), 401, publishPath);
+        expectError(mvc.perform(patch(cancelPath)), 401, cancelPath);
+        for (String deniedToken : new String[]{participantToken, adminToken, otherOrganizerToken}) {
             expectError(mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, deniedToken)
                     .contentType(MediaType.APPLICATION_JSON).content("{}")), 403, itemPath);
             expectError(mvc.perform(delete(itemPath).header(HttpHeaders.AUTHORIZATION, deniedToken)), 403, itemPath);
+            expectError(mvc.perform(patch(publishPath).header(HttpHeaders.AUTHORIZATION, deniedToken)), 403, publishPath);
+            expectError(mvc.perform(patch(cancelPath).header(HttpHeaders.AUTHORIZATION, deniedToken)), 403, cancelPath);
         }
 
+        expectError(mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"startDate":"2099-01-01T12:00:00"}
+                        """)), 400, itemPath);
+        LocalDateTime now = LocalDateTime.now();
+        entityManager.createQuery("""
+                UPDATE Event e SET e.startDate = :start, e.availableTickets = 80 WHERE e.id = :id
+                """).setParameter("start", now.minusDays(1)).setParameter("id", UUID.fromString(id)).executeUpdate();
+        entityManager.clear();
+        expectError(mvc.perform(patch(publishPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 400, publishPath);
+        expectError(mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"capacity":19}
+                        """)), 400, itemPath);
         mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Evento atualizado\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Evento atualizado"));
-        mvc.perform(delete(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"title":"Evento atualizado","startDate":"2099-01-01T10:00:00","capacity":60}
+                        """))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Evento atualizado"))
+                .andExpect(jsonPath("$.availableTickets").value(40));
+
+        mvc.perform(patch(publishPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eventStatus").value("PUBLISHED"))
+                .andExpect(jsonPath("$.published").value(true));
+        mvc.perform(patch(publishPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.published").value(true));
+        mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, participantToken))
+                .andExpect(status().isOk());
+        mvc.perform(get(searchPath).header(HttpHeaders.AUTHORIZATION, participantToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(id));
+        expectError(mvc.perform(delete(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 409, itemPath);
+
+        mvc.perform(patch(cancelPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eventStatus").value("CANCELLED"))
+                .andExpect(jsonPath("$.published").value(false));
+        mvc.perform(patch(cancelPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eventStatus").value("CANCELLED"));
+        mvc.perform(get(minePath).header(HttpHeaders.AUTHORIZATION, organizerToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].status").value("CANCELLED"));
+        mvc.perform(get(searchPath).header(HttpHeaders.AUTHORIZATION, participantToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content").isEmpty());
+        expectError(mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, participantToken)), 404, itemPath);
+        expectError(mvc.perform(patch(publishPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 409, publishPath);
+        expectError(mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{}")), 409, itemPath);
+        expectError(mvc.perform(delete(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 409, itemPath);
+
+        String secondDraft = mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON).content(validEvent.replace("Evento de teste", "Rascunho para excluir")))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String draftPath = eventPath + "/" + json.readTree(secondDraft).get("id").asText();
+        mvc.perform(delete(draftPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
                 .andExpect(status().isNoContent());
-        expectError(mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 404, itemPath);
+        expectError(mvc.perform(get(draftPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 404, draftPath);
     }
 
     @Test

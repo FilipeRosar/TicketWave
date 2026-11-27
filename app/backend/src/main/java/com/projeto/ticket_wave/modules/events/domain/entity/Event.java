@@ -4,6 +4,7 @@ import com.projeto.ticket_wave.modules.events.domain.enums.EventStatus;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventType;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.shared.exception.BusinessException;
+import com.projeto.ticket_wave.shared.exception.ConflictException;
 import com.projeto.ticket_wave.shared.domain.BaseEntity;
 import lombok.*;
 
@@ -73,6 +74,51 @@ public class Event extends BaseEntity {
 
     @Builder.Default
     private List<EventImage> images = new ArrayList<>();
+
+    public boolean isPublishedInCatalog() {
+        return eventStatus == EventStatus.PUBLISHED && Boolean.TRUE.equals(published);
+    }
+
+    public void requireEditable() {
+        if (eventStatus != EventStatus.DRAFT && eventStatus != EventStatus.PUBLISHED) {
+            throw new ConflictException("Somente rascunhos e eventos publicados podem ser editados.");
+        }
+    }
+
+    public void publish(LocalDateTime now) {
+        if (eventStatus != EventStatus.DRAFT) {
+            throw new ConflictException("Somente rascunhos podem ser publicados.");
+        }
+        validateDates();
+        if (!startDate.isAfter(now)) {
+            throw new BusinessException("A data de início deve estar no futuro para publicar o evento.");
+        }
+        eventStatus = EventStatus.PUBLISHED;
+        published = true;
+        publishedBy = organizer;
+    }
+
+    public void cancel() {
+        if (eventStatus != EventStatus.DRAFT && eventStatus != EventStatus.PUBLISHED) {
+            throw new ConflictException("Somente rascunhos e eventos publicados podem ser cancelados.");
+        }
+        eventStatus = EventStatus.CANCELLED;
+        published = false;
+    }
+
+    public void requireDeletable() {
+        if (eventStatus != EventStatus.DRAFT) {
+            throw new ConflictException("Somente rascunhos podem ser excluídos.");
+        }
+    }
+
+    public void updateCapacity(int previousCapacity) {
+        int occupied = Math.max(previousCapacity - availableTickets, totalTicketsSold);
+        if (capacity < occupied) {
+            throw new BusinessException("A capacidade deve comportar os ingressos já comprometidos.");
+        }
+        availableTickets = capacity - occupied;
+    }
 
     public void validateDates(){
         if (!endDate.isAfter(startDate)) {

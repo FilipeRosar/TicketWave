@@ -16,6 +16,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,8 +49,22 @@ class EventPersistenceAdapter implements EventRepository {
     }
 
     @Override
+    public Page<Event> findByOrganizer(UUID organizerId, Pageable pageable) {
+        return repository.findByOrganizerId(organizerId, pageable).map(mapper::toDomain);
+    }
+
+    @Override
+    public Page<Event> searchPublished(EventSearchCriteria criteria, Pageable pageable) {
+        return search(EventSpecification.published().and(EventSpecification.withFilters(criteria)), criteria.sort(), pageable);
+    }
+
+    @Override
     public Page<Event> search(EventSearchCriteria criteria, Pageable pageable) {
-        Sort sort = searchSort(criteria.sort());
+        return search(EventSpecification.withFilters(criteria), criteria.sort(), pageable);
+    }
+
+    private Page<Event> search(Specification<EventJpaEntity> specification, EventSort order, Pageable pageable) {
+        Sort sort = searchSort(order);
         Pageable page = pageable;
         if (sort.isSorted()) {
             sort = sort.and(Sort.by("id"));
@@ -57,7 +72,7 @@ class EventPersistenceAdapter implements EventRepository {
                     ? PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort)
                     : Pageable.unpaged(sort);
         }
-        return repository.findAll(EventSpecification.withFilters(criteria), page).map(mapper::toDomain);
+        return repository.findAll(specification, page).map(mapper::toDomain);
     }
 
     private Sort searchSort(EventSort sort) {
