@@ -38,9 +38,6 @@ input:focus { outline-offset: 2px; background: white; }
 .notice, .error { border-radius: 9px; padding: 10px 13px; margin-block: 14px; }
 .notice { background: #e4f7f7; color: #12494a; border-inline-start: 3px solid var(--wave-teal); }
 .error { background: #fbecee; color: #891d28; }
-.profile { display: grid; gap: 4px; margin-block: 20px; overflow-wrap: anywhere; }
-.profile dt { color: var(--wave-muted); font-weight: 700; }
-.profile dd { margin: 0 0 10px; }
 
 @media (max-width: 760px) {
   .auth-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
@@ -50,3 +47,9 @@ input:focus { outline-offset: 2px; background: white; }
   .form-side { padding: 22px 24px; }
   .form-content { padding-block: 42px 24px; }
 }
+
+.address-fields { display: grid; gap: 8px; min-width: 0; margin: 16px 0 0; padding: 0; border: 0; }
+.address-fields legend { font-size: 1.2rem; font-weight: 800; }
+.zip-code { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.zip-code button { cursor: pointer; }
+.zip-code button:disabled { cursor: wait; opacity: .65; }

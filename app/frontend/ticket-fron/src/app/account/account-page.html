@@ -1,0 +1,38 @@
+<header class="site-header">
+  <nav class="site-nav" aria-label="Navegação principal">
+    <a class="brand" routerLink="/" aria-label="TicketWave, início">
+      <img src="assets/home/mark.png" alt="" width="34" height="34">
+      <span>Ticket<span>Wave</span></span>
+    </a>
+    <a class="explore" routerLink="/">Explorar eventos <span aria-hidden="true">↗</span></a>
+  </nav>
+</header>
+
+<main class="account" aria-labelledby="account-title">
+  <h1 id="account-title">Minha conta</h1>
+  @if (session.user(); as user) {
+    <div class="account-grid" [class.single-column]="user.role !== 'ROLE_CUSTOMER'">
+      @if (user.role === 'ROLE_CUSTOMER') {
+        <app-participant-profile [accountName]="user.name" />
+      }
+      <aside class="panel" aria-labelledby="account-details">
+        <h2 id="account-details">Dados da conta</h2>
+        <dl>
+          <dt>Nome do cadastro</dt>
+          <dd>{{ user.name }}</dd>
+          <dt>E-mail</dt>
+          <dd>{{ user.email }}</dd>
+        </dl>
+        <button type="button" class="logout" [disabled]="busy()" (click)="logout()">
+          {{ busy() ? 'Saindo…' : 'Sair da conta' }}
+        </button>
+        @if (error()) { <p role="alert" class="error">{{ error() }}</p> }
+      </aside>
+    </div>
+  } @else {
+    <section class="panel signed-out">
+      <p role="status">{{ session.sessionNotice() || 'Entre para acessar sua conta.' }}</p>
+      <a class="sign-in" routerLink="/entrar">Entrar</a>
+    </section>
+  }
+</main>

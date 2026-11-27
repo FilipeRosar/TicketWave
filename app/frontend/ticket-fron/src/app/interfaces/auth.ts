@@ -1,3 +1,5 @@
+import type { RegistrationAddress } from './address';
+
 export interface Tokens {
   accessToken: string;
   refreshToken: string;
@@ -5,6 +7,7 @@ export interface Tokens {
 }
 
 export interface Profile {
+  role: 'ROLE_CUSTOMER' | 'ROLE_ORGANIZER' | 'ROLE_ADMIN';
   name: string;
   email: string;
 }
@@ -17,4 +20,5 @@ export interface Registration {
   cpf: string;
   password: string;
   passwordConfirmation: string;
+  address: RegistrationAddress;
 }

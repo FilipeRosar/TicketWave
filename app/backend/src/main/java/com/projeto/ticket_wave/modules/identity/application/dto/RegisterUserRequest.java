@@ -1,5 +1,6 @@
 package com.projeto.ticket_wave.modules.identity.application.dto;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -38,7 +39,11 @@ public record RegisterUserRequest(
 
         @NotBlank(message = "Confirme sua senha.")
         @Size(min = 8, max = 20, message = "A confirmação deve ter de 8 a 20 caracteres.")
-        String passwordConfirmation
+        String passwordConfirmation,
+
+        @NotNull(message = "Informe o endereço.")
+        @Valid
+        RegistrationAddressRequest address
 ) {
     @AssertTrue(message = "As senhas devem ser iguais.")
     public boolean isPasswordConfirmed() {

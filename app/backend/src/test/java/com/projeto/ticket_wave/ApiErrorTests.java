@@ -19,18 +19,25 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.time.LocalDate;
+import java.util.Base64;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
@@ -70,13 +77,17 @@ class ApiErrorTests {
         mvc.perform(post(auth + "/register").contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"name":"JWT Test","email":"jwt-flow@example.test","password":"test-password","phone":"11944445555",
-                         "birthDate":"1995-04-20","cpf":"529.982.247-25","passwordConfirmation":"test-password"}
+                         "birthDate":"1995-04-20","cpf":"529.982.247-25","passwordConfirmation":"test-password",
+                         "address":{"zipCode":"01001-000","street":"Praça da Sé","number":"S/N","district":"Sé","city":"São Paulo","state":"SP"}}
                         """))
                 .andExpect(status().isOk());
 
         User registered = users.findByEmail("jwt-flow@example.test").orElseThrow();
         assertThat(registered.getBirthDate()).isEqualTo(LocalDate.of(1995, 4, 20));
         assertThat(registered.getCpf()).isEqualTo("52998224725");
+        assertThat(registered.getRegistrationAddress().zipCode()).isEqualTo("01001000");
+        assertThat(registered.getRegistrationAddress().street()).isEqualTo("Praça da Sé");
+        assertThat(registered.getRegistrationAddress().number()).isEqualTo("S/N");
 
         String login = """
                 {"email":"jwt-flow@example.test","password":"test-password"}
@@ -116,7 +127,7 @@ class ApiErrorTests {
     void formatsValidationAndMalformedRequests() throws Exception {
         String path = "/v1/api/auth/register";
         expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{}")), 400, path)
-                .andExpect(jsonPath("$.violations.length()").value(7));
+                .andExpect(jsonPath("$.violations.length()").value(8));
         expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{")), 400, path)
                 .andExpect(jsonPath("$.violations").isEmpty());
         expectError(mvc.perform(post(path).contentType(MediaType.TEXT_PLAIN).content("{}")), 415, path);
@@ -137,11 +148,15 @@ class ApiErrorTests {
         String path = "/v1/api/auth/register";
         String registration = """
                 {"name":"Nova conta","email":"duplicate@example.test","password":"test-password","phone":"11933334444",
-                 "birthDate":"1995-04-20","cpf":"111.444.777-35","passwordConfirmation":"test-password"}
+                 "birthDate":"1995-04-20","cpf":"111.444.777-35","passwordConfirmation":"test-password",
+                         "address":{"zipCode":"01001-000","street":"Praça da Sé","number":"S/N","district":"Sé","city":"São Paulo","state":"SP"}}
                 """;
         expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
                 .content(registration.replace("111.444.777-35", "111.111.111-11"))), 400, path)
                 .andExpect(jsonPath("$.violations[0].field").value("cpf"));
+        expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
+                .content(registration.replace("01001-000", "123"))), 400, path)
+                .andExpect(jsonPath("$.violations[0].field").value("address.zipCode"));
         expectError(mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON)
                 .content(registration.replace("1995-04-20", "2099-01-01"))), 400, path)
                 .andExpect(jsonPath("$.violations[0].field").value("birthDate"));
@@ -259,6 +274,57 @@ class ApiErrorTests {
         mvc.perform(delete(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
                 .andExpect(status().isNoContent());
         expectError(mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 404, itemPath);
+    }
+
+    @Test
+    @Transactional
+    void participantCanCreateViewEditAndDeleteTheirOwnProfile() throws Exception {
+        String path = "/v1/api/profile/me";
+        String owner = bearerFor("profile@example.test", "11999994444", Role.ROLE_CUSTOMER);
+        String other = bearerFor("other-profile@example.test", "11999995555", Role.ROLE_CUSTOMER);
+        String organizer = bearerFor("profile-organizer@example.test", "11999996666", Role.ROLE_ORGANIZER);
+
+        expectError(mvc.perform(get(path)), 401, path);
+        expectError(mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, organizer)), 403, path);
+        expectError(mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, owner)), 404, path);
+        expectError(mvc.perform(multipart(HttpMethod.PUT, path).header(HttpHeaders.AUTHORIZATION, owner)
+                .param("name", " ")), 400, path);
+        expectError(mvc.perform(multipart(HttpMethod.PUT, path)
+                .file(new MockMultipartFile("photo", "invalid.png", "image/png", new byte[]{1, 2, 3}))
+                .header(HttpHeaders.AUTHORIZATION, owner).param("name", "Nome do perfil")), 400, path);
+
+        ByteArrayOutputStream png = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(2, 2, BufferedImage.TYPE_INT_RGB), "png", png);
+        String encodedPhoto = Base64.getEncoder().encodeToString(png.toByteArray());
+        mvc.perform(multipart(HttpMethod.PUT, path)
+                .file(new MockMultipartFile("photo", "profile.png", "image/png", png.toByteArray()))
+                .header(HttpHeaders.AUTHORIZATION, owner)
+                .param("name", "Nome do perfil").param("occupation", "Designer")
+                .param("city", "São Paulo").param("bio", "Acompanho eventos de design."))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.photoType").value("image/png"))
+                .andExpect(jsonPath("$.photo").value(encodedPhoto));
+        mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, owner))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.occupation").value("Designer"))
+                .andExpect(jsonPath("$.city").value("São Paulo"))
+                .andExpect(jsonPath("$.bio").value("Acompanho eventos de design."));
+        expectError(mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, other)), 404, path);
+
+        mvc.perform(multipart(HttpMethod.PUT, path).header(HttpHeaders.AUTHORIZATION, owner)
+                .param("name", "Nome atualizado"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Nome atualizado"))
+                .andExpect(jsonPath("$.photo").value(encodedPhoto));
+        mvc.perform(multipart(HttpMethod.PUT, path).header(HttpHeaders.AUTHORIZATION, owner)
+                .param("name", "Nome atualizado").param("removePhoto", "true"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.photo").isEmpty());
+
+        mvc.perform(delete(path).header(HttpHeaders.AUTHORIZATION, owner)).andExpect(status().isNoContent());
+        expectError(mvc.perform(get(path).header(HttpHeaders.AUTHORIZATION, owner)), 404, path);
+        mvc.perform(get("/v1/api/auth/me").header(HttpHeaders.AUTHORIZATION, owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.email").value("profile@example.test"));
     }
 
     private String bearerFor(String email, String phone, Role role) {

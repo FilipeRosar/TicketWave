@@ -26,5 +26,7 @@ public class User extends BaseEntity {
 
     private String cpf;
 
+    private RegistrationAddress registrationAddress;
+
     private Boolean enabled = true;
 }

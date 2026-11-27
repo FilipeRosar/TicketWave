@@ -1,11 +1,14 @@
 package com.projeto.ticket_wave.modules.identity.infrastructure.persistence.entity;
 
+import com.projeto.ticket_wave.modules.identity.domain.entity.RegistrationAddress;
 import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
 import com.projeto.ticket_wave.shared.persistence.JpaBaseEntity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDate;
 
@@ -36,6 +39,10 @@ public class UserJpaEntity extends JpaBaseEntity {
 
     @Column(length = 11, unique = true)
     private String cpf;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "registration_address")
+    private RegistrationAddress registrationAddress;
 
     @Column(nullable = false)
     private Boolean enabled = true;

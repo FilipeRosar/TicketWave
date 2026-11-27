@@ -3,6 +3,7 @@ package com.projeto.ticket_wave.modules.identity.application.service;
 import com.projeto.ticket_wave.modules.identity.application.dto.RegisterUserRequest;
 import com.projeto.ticket_wave.modules.identity.application.dto.UserResponse;
 import com.projeto.ticket_wave.modules.identity.application.mapper.UserMapper;
+import com.projeto.ticket_wave.modules.identity.domain.entity.RegistrationAddress;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
 import com.projeto.ticket_wave.modules.identity.application.port.UserRepository;
@@ -33,6 +34,11 @@ public class UserService {
         user.setPhone(dto.phone());
         user.setBirthDate(dto.birthDate());
         user.setCpf(dto.cpf().replace(".", "").replace("-", ""));
+        var address = dto.address();
+        user.setRegistrationAddress(new RegistrationAddress(
+                address.zipCode().replace("-", ""), address.street().strip(), address.number().strip(),
+                address.complement() == null ? null : address.complement().strip(),
+                address.district().strip(), address.city().strip(), address.state()));
         user.setRole(Role.ROLE_CUSTOMER);
         user.setEnabled(true);
         user.setCreatedDate(Instant.now());

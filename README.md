@@ -41,9 +41,16 @@ docker compose down
 
 ## Usar a API
 
-1. No Swagger, use `POST /v1/api/auth/register` para cadastrar um usuário. Informe nome, e-mail, telefone, data de nascimento (`birthDate`, no formato `AAAA-MM-DD`), CPF (`cpf`), senha e confirmação (`passwordConfirmation`). O CPF aceita 11 dígitos ou o formato com pontos e hífen.
+1. No Swagger, use `POST /v1/api/auth/register` para cadastrar um usuário. Informe nome, e-mail, telefone, data de nascimento (`birthDate`, no formato `AAAA-MM-DD`), CPF (`cpf`), senha e confirmação (`passwordConfirmation`). O CPF aceita 11 dígitos ou o formato com pontos e hífen. Envie o endereço em `address` com `zipCode`, `street`, `number`, `district`, `city`, `state` e, opcionalmente, `complement`. No formulário Angular, **Buscar CEP** consulta o ViaCEP e preenche os campos disponíveis. Preencha o número e confira o endereço antes de enviar.
 2. Use `POST /v1/api/auth/login` para obter `accessToken` e `refreshToken`. Informe o token de acesso no botão **Authorize** do Swagger ou envie `Authorization: Bearer <accessToken>` nas rotas protegidas.
 3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A criação, atualização e exclusão exigem `ROLE_ORGANIZER`. O organizador só pode alterar e excluir os próprios eventos. O cadastro público atribui `ROLE_CUSTOMER` (participante).
+
+### Perfil do participante
+
+Em **Minha conta**, participantes podem criar, visualizar, editar e excluir seu próprio perfil.
+A API disponibiliza `GET`, `PUT` e `DELETE` em `/v1/api/profile/me`.
+Envie os campos `name`, `occupation`, `city`, `bio` e a foto opcional `photo` via `multipart/form-data` no `PUT`.
+Use `removePhoto=true` para remover uma foto existente. A exclusão apaga o perfil e preserva a conta.
 
 ### Usar a home Angular
 

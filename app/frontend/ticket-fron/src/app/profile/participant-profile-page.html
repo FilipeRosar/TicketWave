@@ -1,0 +1,123 @@
+<section aria-labelledby="participant-profile-title">
+  <article class="profile-card">
+    <div class="cover" aria-hidden="true"></div>
+    <div class="identity">
+      <div class="identity-bar">
+        <div class="avatar main-avatar">
+          @if (photoUrl(); as photo) {
+            <img [src]="photo" alt="Foto do perfil" width="100" height="100">
+          } @else {
+            <span aria-hidden="true">{{ initials() }}</span>
+          }
+        </div>
+        @if (profile() && !editing() && !confirmingDelete()) {
+          <button type="button" class="button secondary" (click)="startEditing()">Editar perfil</button>
+        }
+      </div>
+      <h2 id="participant-profile-title">{{ displayName() }}</h2>
+      @if (profile(); as details) {
+        @if (details.occupation || details.city) {
+          <p class="metadata">
+            @if (details.occupation) { <span>{{ details.occupation }}</span> }
+            @if (details.occupation && details.city) { <span aria-hidden="true">·</span> }
+            @if (details.city) { <span>{{ details.city }}</span> }
+          </p>
+        }
+      }
+    </div>
+  </article>
+
+  @if (status()) { <p role="status" class="feedback success">{{ status() }}</p> }
+  @if (error()) { <p role="alert" class="feedback error">{{ error() }}</p> }
+
+  @if (editing()) {
+    <article class="panel">
+      <header class="panel-heading">
+        <h3 #editorTitle tabindex="-1">{{ profile() ? 'Editar perfil' : 'Criar perfil' }}</h3>
+        <p>Escolha sua foto e conte um pouco sobre você.</p>
+      </header>
+      <form #profileForm (submit)="save($event, profileForm)">
+        <fieldset [disabled]="busy()">
+          <div class="photo-picker">
+            <div class="avatar edit-avatar">
+              @if (photoPreview() || (!removingPhoto() && photoUrl()); as photo) {
+                <img [src]="photo" alt="Prévia da foto do perfil" width="70" height="70">
+              } @else {
+                <span aria-hidden="true">{{ initials() }}</span>
+              }
+            </div>
+            <div class="photo-details">
+              <span class="field-label">Foto de perfil</span>
+              <input #photoInput id="profile-photo" class="photo-input" name="photo" type="file"
+                accept="image/jpeg,image/png" aria-describedby="photo-limit" (change)="selectPhoto(photoInput)">
+              <label class="button secondary upload" for="profile-photo">{{ photoUrl() ? 'Trocar foto' : 'Adicionar foto' }}</label>
+              <small id="photo-limit">JPEG ou PNG, até 1 MB e 2048 × 2048 pixels.</small>
+              @if (photoName()) { <small class="file-name">{{ photoName() }}</small> }
+              @if (photoUrl() && !photoPreview()) {
+                <label class="check">
+                  <input #removePhoto name="removePhoto" type="checkbox" value="true"
+                    [checked]="removingPhoto()" (change)="removingPhoto.set(removePhoto.checked)">
+                  Remover foto atual
+                </label>
+              }
+            </div>
+          </div>
+
+          <div class="fields">
+            <label class="wide" for="profile-name">Nome
+              <input id="profile-name" name="name" autocomplete="name" required maxlength="150"
+                [value]="profile()?.name ?? accountName()">
+            </label>
+            <label for="profile-occupation">Cargo ou ocupação
+              <input id="profile-occupation" name="occupation" autocomplete="organization-title" maxlength="120"
+                placeholder="Ex.: Designer" [value]="profile()?.occupation ?? ''">
+            </label>
+            <label for="profile-city">Cidade
+              <input id="profile-city" name="city" autocomplete="address-level2" maxlength="120"
+                placeholder="Ex.: São Paulo" [value]="profile()?.city ?? ''">
+            </label>
+            <label class="wide" for="profile-bio">Bio
+              <textarea id="profile-bio" name="bio" rows="4" maxlength="1000"
+                placeholder="Que tipo de evento você gosta de frequentar?" [value]="profile()?.bio ?? ''"></textarea>
+            </label>
+          </div>
+        </fieldset>
+        <footer class="actions">
+          <button class="button secondary" type="button" [disabled]="busy()" (click)="cancelEditing()">Cancelar</button>
+          <button class="button primary" type="submit" [disabled]="busy()">{{ busy() ? 'Salvando…' : 'Salvar perfil' }}</button>
+        </footer>
+      </form>
+    </article>
+  } @else if (profile(); as details) {
+    <article class="panel">
+      <h3>Sobre mim</h3>
+      <p class="bio" [class.muted]="!details.bio">{{ details.bio || 'Adicione uma bio em Editar perfil.' }}</p>
+      @if (confirmingDelete()) {
+        <div class="delete-confirm">
+          <p>Excluir o perfil e a foto? Você poderá criar outro perfil depois.</p>
+          <div class="actions">
+            <button class="button secondary" type="button" [disabled]="busy()"
+              (click)="confirmingDelete.set(false); error.set('')">Cancelar</button>
+            <button class="button danger" type="button" [disabled]="busy()" (click)="deleteProfile()">Confirmar exclusão</button>
+          </div>
+        </div>
+      } @else {
+        <button class="delete-link" type="button" (click)="confirmingDelete.set(true)">Excluir perfil</button>
+      }
+    </article>
+  } @else if (loaded()) {
+    <article class="panel empty">
+      <div>
+        <h3>Seu perfil ainda está em branco</h3>
+        <p>Adicione uma foto, sua cidade e uma bio.</p>
+      </div>
+      <button class="button primary" type="button" (click)="startEditing()">Criar perfil</button>
+    </article>
+  } @else if (error()) {
+    <article class="panel">
+      <button class="button secondary" type="button" (click)="loadProfile()">Tentar novamente</button>
+    </article>
+  } @else {
+    <p class="feedback" role="status">Carregando perfil…</p>
+  }
+</section>

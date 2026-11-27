@@ -1,11 +1,13 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { AuthApi } from '../api/auth-api';
+import { ParticipantProfileApi } from '../api/participant-profile-api';
 import type { Profile, Registration, Tokens } from '../interfaces/auth';
 
 @Injectable({ providedIn: 'root' })
 export class AuthSession {
   private readonly api = inject(AuthApi);
+  private readonly profiles = inject(ParticipantProfileApi);
   private readonly profile = signal<Profile | null>(null);
   private readonly notice = signal('');
   private tokens?: Tokens;
@@ -29,6 +31,23 @@ export class AuthSession {
     this.profile.set(profile);
     this.notice.set('');
     this.setTokens(tokens);
+  }
+
+  getParticipantProfile() {
+    return this.profiles.get(this.accessToken());
+  }
+
+  saveParticipantProfile(data: FormData) {
+    return this.profiles.save(this.accessToken(), data);
+  }
+
+  deleteParticipantProfile() {
+    return this.profiles.delete(this.accessToken());
+  }
+
+  private accessToken(): string {
+    if (!this.tokens) throw new Error('Entre para acessar seu perfil.');
+    return this.tokens.accessToken;
   }
 
   async logout(): Promise<void> {
