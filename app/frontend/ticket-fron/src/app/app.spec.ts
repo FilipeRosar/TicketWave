@@ -330,11 +330,12 @@ describe('Navegação do TicketWave', () => {
       id: 'organization-one', name: 'Eventos da Cidade', type: 'PF',
       commercialName: null, contactEmail: null, description: null, financialStatus: 'PENDING',
       pending: ['COMMERCIAL_NAME', 'CONTACT_EMAIL', 'FINANCIAL_APPROVAL'],
+      verificationStatus: 'PENDING', verificationReason: null, documentAvailable: false,
     };
     http.expectOne(path + '/onboarding').flush([organization]);
     await render();
     expect(page.textContent).toContain('Habilitação pendente');
-    const profile = page.querySelector('form')!;
+    const profile = page.querySelector<HTMLInputElement>('#commercial-name')!.form!;
     (profile.elements.namedItem('commercialName') as HTMLInputElement).value = 'Agenda da Cidade';
     profile.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
     const update = http.expectOne(path + '/organization-one/commercial-profile');
@@ -350,6 +351,15 @@ describe('Navegação do TicketWave', () => {
     await render();
     expect(harness.routeNativeElement!.querySelector<HTMLInputElement>('#commercial-name')!.value).toBe('Agenda da Cidade');
     expect(harness.routeNativeElement!.textContent).toContain('Informar o e-mail de contato');
+    const verification = harness.routeNativeElement!.querySelector<HTMLButtonElement>(
+      'section[aria-labelledby="verification-title"] button',
+    )!;
+    verification.form!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    http.expectOne(path + '/organization-one/verification/submit')
+      .flush({ id: organization.id, status: 'IN_REVIEW', reason: null, documentAvailable: false });
+    await render();
+    expect(harness.routeNativeElement!.querySelector('section[aria-labelledby="verification-title"]')!.textContent)
+      .toContain('Em análise');
     expect(session.user()?.role).toBe('ROLE_CUSTOMER');
     http.verify();
   });

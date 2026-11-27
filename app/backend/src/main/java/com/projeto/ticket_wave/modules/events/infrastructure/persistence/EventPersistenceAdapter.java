@@ -9,6 +9,7 @@ import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.EventJpaEntity;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.VenueJpaEntity;
 import com.projeto.ticket_wave.modules.identity.infrastructure.persistence.entity.UserJpaEntity;
+import com.projeto.ticket_wave.modules.organizations.domain.OrganizationPermission;
 import com.projeto.ticket_wave.shared.persistence.JpaEntityAccess;
 import java.util.List;
 import java.util.Optional;
@@ -22,7 +23,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
-import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationMemberRole.EVENT_MANAGERS;
+import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationPermission.READ_EVENTS;
+import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationPermission.READ_REPORTS;
 
 @Repository
 @RequiredArgsConstructor
@@ -38,18 +40,18 @@ class EventPersistenceAdapter implements EventRepository {
     }
 
     @Override
-    public Optional<Event> findManagedEvent(UUID id, UUID userId) {
-        return repository.findManagedEvent(id, userId, EVENT_MANAGERS).map(mapper::toDomainWithImages);
+    public Optional<Event> findManagedEvent(UUID id, UUID userId, OrganizationPermission permission) {
+        return repository.findManagedEvent(id, userId, permission.roles()).map(mapper::toDomainWithImages);
     }
 
     @Override
     public Optional<Event> findVisibleEvent(UUID id, UUID userId) {
-        return repository.findVisibleEvent(id, userId, EVENT_MANAGERS).map(mapper::toDomainWithImages);
+        return repository.findVisibleEvent(id, userId, READ_EVENTS.roles()).map(mapper::toDomainWithImages);
     }
 
     @Override
     public List<EventReportRow> report(UUID organizationId, UUID userId) {
-        return repository.report(organizationId, userId, EVENT_MANAGERS);
+        return repository.report(organizationId, userId, READ_REPORTS.roles());
     }
 
     @Override
@@ -69,7 +71,7 @@ class EventPersistenceAdapter implements EventRepository {
 
     @Override
     public Page<Event> findManageableByMember(UUID userId, UUID organizationId, Pageable pageable) {
-        return repository.findManageableByMember(userId, organizationId, EVENT_MANAGERS, pageable).map(mapper::toDomain);
+        return repository.findManageableByMember(userId, organizationId, READ_EVENTS.roles(), pageable).map(mapper::toDomain);
     }
 
     @Override

@@ -40,4 +40,13 @@ public class OrganizationMemberJpaEntity extends JpaBaseEntity {
         this.role = role;
         this.status = OrganizationStatus.ACTIVE;
     }
+
+    public void activate(OrganizationMemberRole role) {
+        this.role = role;
+        this.status = OrganizationStatus.ACTIVE;
+    }
+
+    public void deactivate() {
+        this.status = OrganizationStatus.INACTIVE;
+    }
 }

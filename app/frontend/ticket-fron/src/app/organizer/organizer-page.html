@@ -77,6 +77,31 @@
                 <p class="hint">Você pode salvar rascunhos de eventos enquanto aguarda. A publicação paga exige habilitação aprovada.</p>
               }
             </section>
+            <section class="panel" aria-labelledby="verification-title">
+              <div class="panel-title">
+                <h2 id="verification-title">Verificação cadastral</h2>
+                <span class="status" [class.approved]="organization.verificationStatus === 'APPROVED'">
+                  {{ verificationLabels[organization.verificationStatus] }}
+                </span>
+              </div>
+              @if (organization.verificationReason; as reason) {
+                <p class="hint">{{ verificationReasons[reason] }}</p>
+              }
+              @if (organization.verificationStatus === 'PENDING' || organization.verificationStatus === 'REJECTED') {
+                <form #verification (submit)="submitVerification($event, verification, organization.id)">
+                  @if (organization.type === 'PJ' && !organization.documentAvailable) {
+                    <label for="verification-document">CNPJ</label>
+                    <input id="verification-document" name="document" maxlength="18" required>
+                  } @else if (organization.type === 'PF' && organization.verificationStatus === 'REJECTED') {
+                    <label for="verification-document">CPF (opcional)</label>
+                    <input id="verification-document" name="document" inputmode="numeric" maxlength="14">
+                  }
+                  <button type="submit" class="primary" [disabled]="busy()">
+                    {{ organization.verificationStatus === 'REJECTED' ? 'Reenviar para análise' : 'Enviar para análise' }}
+                  </button>
+                </form>
+              }
+            </section>
             <section class="panel">
               <h2>Perfil comercial</h2>
               <form #commercial (submit)="save($event, commercial, organization.id)">

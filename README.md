@@ -43,7 +43,7 @@ docker compose down
 
 1. No Swagger, use `POST /v1/api/auth/register` para cadastrar um usuário. Informe nome, e-mail, telefone, data de nascimento (`birthDate`, no formato `AAAA-MM-DD`), CPF (`cpf`), senha e confirmação (`passwordConfirmation`). O CPF aceita 11 dígitos ou o formato com pontos e hífen. Envie o endereço em `address` com `zipCode`, `street`, `number`, `district`, `city`, `state` e, opcionalmente, `complement`. No formulário Angular, **Buscar CEP** consulta o ViaCEP e preenche os campos disponíveis. Preencha o número e confira o endereço antes de enviar.
 2. Use `POST /v1/api/auth/login` para obter `accessToken` e `refreshToken`. Informe o token de acesso no botão **Authorize** do Swagger ou envie `Authorization: Bearer <accessToken>` nas rotas protegidas.
-3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A gestão de eventos exige vínculo ativo `OWNER` ou `ADMIN` na organização do evento. O cadastro público atribui `ROLE_CUSTOMER` (participante).
+3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A gestão de eventos segue as permissões da organização do evento. O cadastro público atribui `ROLE_CUSTOMER` (participante).
 
 ### Cadastro de organização
 
@@ -58,6 +58,25 @@ Documentos são criptografados e omitidos das respostas. Para cadastros com docu
 No Angular, abra **Minha conta → Central do organizador** para cadastrar uma organização, retomar o perfil comercial e consultar pendências. A API lista organizações próprias em `GET /v1/api/organizations/onboarding` e salva o perfil comercial em `PUT /v1/api/organizations/{id}/commercial-profile`.
 
 Inclua `organizationId` ao criar um evento pela organização. A conta proprietária pode criar rascunhos e publicar eventos gratuitos antes da habilitação, preservando seu papel pessoal. Para publicar eventos pagos ou passar um evento publicado para um novo preço positivo, a organização precisa de habilitação aprovada. A aprovação não é editável pelo proprietário.
+
+### Permissões por organização
+
+| Ação | Papéis com vínculo ativo |
+| --- | --- |
+| Adicionar, alterar e remover membros | `OWNER` |
+| Listar membros | `OWNER`, `ADMIN` |
+| Editar perfil comercial | `OWNER` |
+| Ler eventos privados, criar e editar rascunhos | `OWNER`, `ADMIN`, `OPERADOR` |
+| Editar evento publicado, publicar, cancelar, excluir rascunho e gerenciar imagens | `OWNER`, `ADMIN` |
+| Consultar relatórios de eventos | `OWNER`, `ADMIN`, `FINANCEIRO` |
+
+Use `GET /v1/api/organizations/{id}/members` para listar os vínculos, `PUT /v1/api/organizations/{id}/members/{userId}` com `role` para atribuir o papel e `DELETE` no mesmo caminho para desativar o vínculo. A organização deve manter pelo menos um proprietário ativo. O papel global da conta e os vínculos em outras organizações são independentes.
+
+### Verificação cadastral
+
+A Central do organizador exibe a situação e as pendências. O `OWNER` pode enviar uma verificação pendente ou rejeitada em `POST /v1/api/organizations/{id}/verification/submit`. Um administrador da plataforma independente da organização acessa a fila em `GET /v1/api/organizations/verification/queue` e decide em `PATCH /v1/api/organizations/{id}/verification/review`. Uma rejeição exige um código de motivo.
+
+Cada transição registra estado anterior, novo estado, autor e horário. O documento cifrado é descartado após a decisão. Um novo envio de PJ após rejeição exige CNPJ. A análise é manual enquanto não houver um provedor definido, e a aprovação cadastral é independente da habilitação financeira.
 
 ### Gestão de eventos
 
@@ -74,7 +93,7 @@ A publicação exige data de início futura. O término deve ser posterior ao in
 
 Na criação, informe `organizationId`. A migração V22 gera uma organização de legado por responsável de eventos que ainda não tinham vínculo, registra o mapeamento em `legacy_event_organization_map` e preserva os vínculos já definidos. Para responsáveis mapeados, requisições de criação sem `organizationId` usam a organização de legado. A migração preserva o autor, o responsável pela publicação e os registros associados aos eventos existentes.
 
-O relatório `GET /v1/api/organizations/{organizationId}/reports/events` retorna contagens de eventos e ingressos vendidos agrupadas por status para a organização selecionada. O acesso exige vínculo ativo como `OWNER` ou `ADMIN` na organização. O catálogo de eventos publicados continua acessível a outras contas autenticadas.
+O relatório `GET /v1/api/organizations/{organizationId}/reports/events` retorna contagens de eventos e ingressos vendidos agrupadas por status para a organização selecionada. O acesso exige vínculo ativo como `OWNER`, `ADMIN` ou `FINANCEIRO` na organização. O catálogo de eventos publicados continua acessível a outras contas autenticadas.
 
 Nas rotas de criação e edição, use `classification` com `PROFESSIONAL` ou `SOCIAL`. O campo `eventType` mantém o formato presencial, online ou híbrido, e `categoryId` identifica a categoria do evento. Cadastros anteriores e requisições de criação sem classificação usam `SOCIAL`.
 

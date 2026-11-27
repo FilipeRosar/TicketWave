@@ -53,6 +53,10 @@ export class AuthSession {
     return this.organizations.create(this.accessToken(), request);
   }
 
+  submitOrganizationVerification(id: string, document?: string) {
+    return this.organizations.submitVerification(this.accessToken(), id, document);
+  }
+
   saveCommercialProfile(id: string, profile: CommercialProfile) {
     return this.organizations.save(this.accessToken(), id, profile);
   }

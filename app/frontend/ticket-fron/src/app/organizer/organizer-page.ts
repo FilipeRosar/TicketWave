@@ -2,7 +2,7 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthSession } from '../auth/auth-session';
-import type { OnboardingPending, OrganizationOnboarding, OrganizationType } from '../interfaces/organization';
+import type { OnboardingPending, OrganizationOnboarding, OrganizationType, VerificationReason, VerificationStatus } from '../interfaces/organization';
 import { ThemeToggle } from '../theme/theme-toggle';
 
 @Component({
@@ -26,6 +26,18 @@ export class OrganizerPage implements OnInit {
     COMMERCIAL_NAME: 'Preencher o nome comercial',
     CONTACT_EMAIL: 'Informar o e-mail de contato',
     FINANCIAL_APPROVAL: 'Aguardar a habilitação financeira',
+  };
+
+  protected readonly verificationLabels: Record<VerificationStatus, string> = {
+    PENDING: 'Pendente',
+    IN_REVIEW: 'Em análise',
+    APPROVED: 'Aprovada',
+    REJECTED: 'Rejeitada',
+  };
+  protected readonly verificationReasons: Record<VerificationReason, string> = {
+    INVALID_DOCUMENT: 'O documento informado precisa ser corrigido.',
+    DATA_MISMATCH: 'Os dados cadastrais precisam ser revisados.',
+    INSUFFICIENT_EVIDENCE: 'Os dados disponíveis foram insuficientes para a análise.',
   };
 
   ngOnInit(): void {
@@ -98,6 +110,28 @@ export class OrganizerPage implements OnInit {
       });
       this.organizations.update(items => items.map(item => item.id === id ? updated : item));
       this.message.set('Perfil comercial salvo.');
+    } catch (error) {
+      this.showError(error);
+    } finally {
+      this.busy.set(false);
+    }
+  }
+
+  protected async submitVerification(event: SubmitEvent, form: HTMLFormElement, id: string): Promise<void> {
+    event.preventDefault();
+    if (this.busy()) return;
+    this.busy.set(true);
+    this.error.set('');
+    this.message.set('');
+    try {
+      const result = await this.session.submitOrganizationVerification(id, this.field(new FormData(form), 'document') ?? undefined);
+      this.organizations.update(items => items.map(item => item.id === id ? {
+        ...item,
+        verificationStatus: result.status,
+        verificationReason: result.reason,
+        documentAvailable: result.documentAvailable,
+      } : item));
+      this.message.set('Verificação enviada para análise.');
     } catch (error) {
       this.showError(error);
     } finally {

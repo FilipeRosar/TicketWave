@@ -4,15 +4,15 @@ import com.projeto.ticket_wave.modules.identity.application.port.CurrentUser;
 import com.projeto.ticket_wave.modules.organizations.application.dto.OrganizationOnboardingResponse;
 import com.projeto.ticket_wave.modules.organizations.application.dto.UpdateCommercialProfileRequest;
 import com.projeto.ticket_wave.modules.organizations.domain.OrganizationFinancialStatus;
-import com.projeto.ticket_wave.modules.organizations.domain.OrganizationMemberRole;
 import com.projeto.ticket_wave.modules.organizations.domain.OrganizationStatus;
 import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationJpaEntity;
 import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationJpaRepository;
-import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationMemberJpaRepository;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.security.OrganizationAccess;
 import com.projeto.ticket_wave.shared.exception.BusinessException;
 import com.projeto.ticket_wave.shared.exception.ConflictException;
 import com.projeto.ticket_wave.shared.exception.ForbiddenException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationMemberRole.EVENT_MANAGERS;
+import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationPermission.EDIT_DRAFTS;
 
 @Service
 @RequiredArgsConstructor
@@ -28,7 +28,7 @@ import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationM
 public class OrganizationOnboardingService {
     private final CurrentUser currentUser;
     private final OrganizationJpaRepository organizations;
-    private final OrganizationMemberJpaRepository members;
+    private final OrganizationAccess access;
 
     public List<OrganizationOnboardingResponse> list() {
         return organizations.findActiveOwnedBy(currentUser.getCurrentUser().getId()).stream()
@@ -36,56 +36,25 @@ public class OrganizationOnboardingService {
     }
 
     @Transactional
+    @PreAuthorize("@organizationAccess.allowed(#organizationId, 'EDIT_COMMERCIAL_PROFILE')")
     public OrganizationOnboardingResponse updateCommercialProfile(UUID organizationId, UpdateCommercialProfileRequest request) {
-        var organization = requireOwner(organizationId, currentUser.getCurrentUser().getId());
+        var organization = organizations.findById(organizationId).orElseThrow(this::forbidden);
         organization.updateCommercialProfile(clean(request.commercialName()), clean(request.contactEmail()),
                 clean(request.description()));
         return toResponse(organization);
     }
 
-    public OrganizationJpaEntity requireOwner(UUID organizationId, UUID userId) {
-        if (hasOwnerMembership(organizationId, userId)) {
-            return organizations.findById(organizationId)
-                    .filter(organization -> organization.getStatus() == OrganizationStatus.ACTIVE)
-                    .orElseThrow(this::forbidden);
-        }
-        throw forbidden();
-    }
-
-    private boolean hasOwnerMembership(UUID organizationId, UUID userId) {
-        return members.existsByOrganizationIdAndUserIdAndRoleAndStatus(
-                organizationId, userId, OrganizationMemberRole.OWNER, OrganizationStatus.ACTIVE);
-    }
-
-    public boolean canManageEvents(UUID organizationId, UUID userId) {
-        return members.existsByOrganizationIdAndUserIdAndRoleInAndStatus(
-                organizationId, userId, EVENT_MANAGERS, OrganizationStatus.ACTIVE)
-                && organizations.existsByIdAndStatus(organizationId, OrganizationStatus.ACTIVE);
-    }
-
-    public void requireEventManagement(UUID organizationId, UUID userId) {
-        if (!canManageEvents(organizationId, userId)) {
-            throw new ForbiddenException("Você não tem permissão para gerenciar eventos desta organização.");
-        }
-    }
-
-    public void requireAnyEventOrganization(UUID userId) {
-        if (!organizations.hasManageableEventOrganization(userId, EVENT_MANAGERS)) {
-            throw new ForbiddenException("Você não tem uma organização com permissão para gerenciar eventos.");
-        }
-    }
-
     public UUID eventOrganization(UUID requestedId, UUID userId) {
         if (requestedId != null) {
-            requireEventManagement(requestedId, userId);
+            access.require(requestedId, userId, EDIT_DRAFTS);
             return requestedId;
         }
         var legacyId = organizations.findLegacyOrganizationId(userId);
         if (legacyId.isPresent()) {
-            requireEventManagement(legacyId.get(), userId);
+            access.require(legacyId.get(), userId, EDIT_DRAFTS);
             return legacyId.get();
         }
-        requireAnyEventOrganization(userId);
+        access.requireAny(userId, EDIT_DRAFTS);
         throw new BusinessException("Informe a organização do evento.");
     }
 
@@ -105,7 +74,8 @@ public class OrganizationOnboardingService {
         if (organization.getFinancialStatus() != OrganizationFinancialStatus.APPROVED) pending.add("FINANCIAL_APPROVAL");
         return new OrganizationOnboardingResponse(organization.getId(), organization.getName(), organization.getType(),
                 organization.getCommercialName(), organization.getContactEmail(), organization.getCommercialDescription(),
-                organization.getFinancialStatus(), List.copyOf(pending));
+                organization.getFinancialStatus(), organization.getVerificationStatus(), organization.getVerificationReason(),
+                organization.getDocumentCiphertext() != null, List.copyOf(pending));
     }
 
     private String clean(String value) {

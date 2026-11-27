@@ -19,6 +19,9 @@ import com.projeto.ticket_wave.modules.identity.infrastructure.security.GoogleId
 import com.projeto.ticket_wave.modules.organizations.domain.OrganizationFinancialStatus;
 import com.projeto.ticket_wave.modules.organizations.domain.OrganizationMemberRole;
 import com.projeto.ticket_wave.modules.organizations.domain.OrganizationType;
+import com.projeto.ticket_wave.modules.organizations.domain.VerificationStatus;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.VerificationHistoryJpaEntity;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.VerificationHistoryJpaRepository;
 import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationJpaEntity;
 import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationJpaRepository;
 import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationMemberJpaEntity;
@@ -124,6 +127,9 @@ class ApiErrorTests {
 
     @Autowired
     private OrganizationJpaRepository organizations;
+
+    @Autowired
+    private VerificationHistoryJpaRepository verificationHistory;
 
     @MockitoSpyBean
     private OrganizationMemberJpaRepository organizationMembers;
@@ -867,16 +873,19 @@ class ApiErrorTests {
         String owner = bearerFor("org-event-owner@example.test", "11999998421", Role.ROLE_CUSTOMER);
         String admin = bearerFor("org-event-admin@example.test", "11999998422", Role.ROLE_CUSTOMER);
         String finance = bearerFor("org-event-finance@example.test", "11999998423", Role.ROLE_CUSTOMER);
+        String operator = bearerFor("org-event-operator@example.test", "11999998426", Role.ROLE_CUSTOMER);
         String secondOwner = bearerFor("org-event-second-owner@example.test", "11999998424", Role.ROLE_CUSTOMER);
         String unaffiliated = bearerFor("org-event-unaffiliated@example.test", "11999998425", Role.ROLE_ADMIN);
         UUID secondOwnerId = users.findByEmail("org-event-second-owner@example.test").orElseThrow().getId();
         UUID ownerId = users.findByEmail("org-event-owner@example.test").orElseThrow().getId();
         UUID adminId = users.findByEmail("org-event-admin@example.test").orElseThrow().getId();
         UUID financeId = users.findByEmail("org-event-finance@example.test").orElseThrow().getId();
+        UUID operatorId = users.findByEmail("org-event-operator@example.test").orElseThrow().getId();
         UUID organizationId = organizationFor(ownerId, "Organização A");
         UUID otherOrganizationId = organizationFor(secondOwnerId, "Organização B");
         organizationMembers.saveAndFlush(new OrganizationMemberJpaEntity(organizationId, adminId, OrganizationMemberRole.ADMIN));
         organizationMembers.saveAndFlush(new OrganizationMemberJpaEntity(organizationId, financeId, OrganizationMemberRole.FINANCEIRO));
+        organizationMembers.saveAndFlush(new OrganizationMemberJpaEntity(organizationId, operatorId, OrganizationMemberRole.OPERADOR));
 
         ObjectNode event = json.readValue(eventWithReferences("""
                 {"title":"Evento da equipe","shortDescription":"Resumo","description":"Descrição",
@@ -937,13 +946,26 @@ class ApiErrorTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.eventStatus").value("DRAFT"))
                 .andExpect(jsonPath("$.title").value("Evento privado da organização B"));
 
+        mvc.perform(get(item).header(HttpHeaders.AUTHORIZATION, operator)).andExpect(status().isOk());
+        mvc.perform(put(item).header(HttpHeaders.AUTHORIZATION, operator)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"title":"Rascunho editado pelo operador"}
+                        """))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Rascunho editado pelo operador"));
+        expectError(mvc.perform(patch(item + "/publish").header(HttpHeaders.AUTHORIZATION, operator)),
+                403, item + "/publish");
+        expectError(mvc.perform(delete(item).header(HttpHeaders.AUTHORIZATION, operator)), 403, item);
+
         String report = "/v1/api/organizations/" + organizationId + "/reports/events";
         String otherReport = "/v1/api/organizations/" + otherOrganizationId + "/reports/events";
         expectError(mvc.perform(get(report)), 401, report);
         expectError(mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, unaffiliated)), 403, report);
-        expectError(mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, finance)), 403, report);
+        mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, finance))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.byStatus[0].ticketsSold").value(3));
+        expectError(mvc.perform(get(otherReport).header(HttpHeaders.AUTHORIZATION, finance)), 403, otherReport);
         expectError(mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, secondOwner)), 403, report);
         expectError(mvc.perform(get(otherReport).header(HttpHeaders.AUTHORIZATION, admin)), 403, otherReport);
+        expectError(mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, operator)), 403, report);
         mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isOk()).andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
                 .andExpect(jsonPath("$.organizationId").value(organizationId.toString()))
@@ -981,6 +1003,8 @@ class ApiErrorTests {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.published").value(true));
         mvc.perform(get(item).header(HttpHeaders.AUTHORIZATION, secondOwner))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.published").value(true));
+        expectError(mvc.perform(put(item).header(HttpHeaders.AUTHORIZATION, operator)
+                .contentType(MediaType.APPLICATION_JSON).content("{}")), 403, item);
         expectError(mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, secondOwner)), 403, report);
 
         assertThat(entityManager.createQuery("SELECT e.publishedBy.id FROM Event e WHERE e.id = :id", UUID.class)
@@ -989,6 +1013,136 @@ class ApiErrorTests {
                 .setParameter("id", eventId).getSingleResult()).isEqualTo(ownerId);
         mvc.perform(patch(item + "/cancel").header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.eventStatus").value("CANCELLED"));
+    }
+
+    @Test
+    void organizationRolesAreContextualAndConcurrentRemovalKeepsAnActiveOwner() throws Exception {
+        String owner = bearerFor("rbac-owner@example.test", "11999998431", Role.ROLE_CUSTOMER);
+        String colleague = bearerFor("rbac-colleague@example.test", "11999998432", Role.ROLE_CUSTOMER);
+        UUID ownerId = users.findByEmail("rbac-owner@example.test").orElseThrow().getId();
+        UUID colleagueId = users.findByEmail("rbac-colleague@example.test").orElseThrow().getId();
+        UUID organizationA = organizationFor(ownerId, "RBAC A");
+        UUID organizationB = organizationFor(ownerId, "RBAC B");
+        String a = "/v1/api/organizations/" + organizationA + "/members";
+        String b = "/v1/api/organizations/" + organizationB + "/members";
+
+        expectError(mvc.perform(delete(a + "/" + ownerId).header(HttpHeaders.AUTHORIZATION, owner)),
+                409, a + "/" + ownerId);
+        expectError(mvc.perform(put(a + "/" + ownerId).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"role":"ADMIN"}
+                        """)), 409, a + "/" + ownerId);
+        mvc.perform(put(a + "/" + colleagueId).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"role":"ADMIN"}
+                        """)).andExpect(status().isOk()).andExpect(jsonPath("$.role").value("ADMIN"));
+        mvc.perform(put(b + "/" + colleagueId).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"role":"FINANCEIRO"}
+                        """)).andExpect(status().isOk()).andExpect(jsonPath("$.role").value("FINANCEIRO"));
+        mvc.perform(get(a).header(HttpHeaders.AUTHORIZATION, colleague))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(2));
+        expectError(mvc.perform(get(b).header(HttpHeaders.AUTHORIZATION, colleague)), 403, b);
+        expectError(mvc.perform(put(a + "/" + colleagueId).header(HttpHeaders.AUTHORIZATION, colleague)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"role":"OWNER"}
+                        """)), 403, a + "/" + colleagueId);
+        assertThat(users.findById(colleagueId).orElseThrow().getRole()).isEqualTo(Role.ROLE_CUSTOMER);
+
+        mvc.perform(put(a + "/" + colleagueId).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"role":"OWNER"}
+                        """)).andExpect(status().isOk());
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            var first = executor.submit(() -> mvc.perform(delete(a + "/" + ownerId).header(HttpHeaders.AUTHORIZATION, owner))
+                    .andReturn().getResponse().getStatus());
+            var second = executor.submit(() -> mvc.perform(delete(a + "/" + colleagueId).header(HttpHeaders.AUTHORIZATION, colleague))
+                    .andReturn().getResponse().getStatus());
+            assertThat(List.of(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder(204, 409);
+        }
+        assertThat(organizationMembers.countByOrganizationIdAndRoleAndStatus(
+                organizationA, OrganizationMemberRole.OWNER,
+                com.projeto.ticket_wave.modules.organizations.domain.OrganizationStatus.ACTIVE)).isEqualTo(1);
+    }
+
+    @Test
+    void verificationRequiresIndependentReviewAndAuditsTransitionsWithoutRetainingDocuments() throws Exception {
+        String base = "/v1/api/organizations";
+        String ownerEmail = "verification-owner@example.test";
+        String reviewerEmail = "verification-reviewer@example.test";
+        String owner = bearerFor(ownerEmail, "11999998451", Role.ROLE_ADMIN);
+        String reviewer = bearerFor(reviewerEmail, "11999998452", Role.ROLE_ADMIN);
+        String participant = bearerFor("verification-participant@example.test", "11999998453", Role.ROLE_CUSTOMER);
+        String created = mvc.perform(post(base).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"name":"Empresa em verificação","type":"PJ","document":"11.222.333/0001-81"}
+                        """)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        UUID id = UUID.fromString(json.readTree(created).get("id").asText());
+        String submit = base + "/" + id + "/verification/submit";
+        String review = base + "/" + id + "/verification/review";
+        String queue = base + "/verification/queue";
+        String approved = """
+                {"status":"APPROVED"}
+                """;
+        expectError(mvc.perform(patch(review).header(HttpHeaders.AUTHORIZATION, reviewer)
+                .contentType(MediaType.APPLICATION_JSON).content(approved)), 409, review);
+        expectError(mvc.perform(post(submit).header(HttpHeaders.AUTHORIZATION, participant)
+                .contentType(MediaType.APPLICATION_JSON).content("{}")), 403, submit);
+        mvc.perform(post(submit).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("IN_REVIEW"))
+                .andExpect(jsonPath("$.documentAvailable").value(true)).andExpect(jsonPath("$.document").doesNotExist());
+        expectError(mvc.perform(post(submit).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("{}")), 409, submit);
+        expectError(mvc.perform(patch(review).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content(approved)), 403, review);
+        expectError(mvc.perform(patch(review).header(HttpHeaders.AUTHORIZATION, participant)
+                .contentType(MediaType.APPLICATION_JSON).content(approved)), 403, review);
+        mvc.perform(get(queue).header(HttpHeaders.AUTHORIZATION, owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content").isEmpty());
+        mvc.perform(get(queue).header(HttpHeaders.AUTHORIZATION, reviewer))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(id.toString()))
+                .andExpect(jsonPath("$.content[0].documentCiphertext").doesNotExist());
+
+        expectError(mvc.perform(patch(review).header(HttpHeaders.AUTHORIZATION, reviewer)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"status":"REJECTED"}
+                        """)), 400, review);
+        mvc.perform(patch(review).header(HttpHeaders.AUTHORIZATION, reviewer)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"status":"REJECTED","reason":"INVALID_DOCUMENT"}
+                        """))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.reason").value("INVALID_DOCUMENT"))
+                .andExpect(jsonPath("$.documentAvailable").value(false));
+        assertThat(organizations.findById(id).orElseThrow().getDocumentCiphertext()).isNull();
+        mvc.perform(get(base + "/onboarding").header(HttpHeaders.AUTHORIZATION, owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].verificationStatus").value("REJECTED"))
+                .andExpect(jsonPath("$[0].verificationReason").value("INVALID_DOCUMENT"));
+        expectError(mvc.perform(post(submit).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("{}")), 400, submit);
+
+        mvc.perform(post(submit).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"document":"12.ABC.345/01DE-35"}
+                        """))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("IN_REVIEW"));
+        mvc.perform(patch(review).header(HttpHeaders.AUTHORIZATION, reviewer)
+                .contentType(MediaType.APPLICATION_JSON).content(approved))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("APPROVED"))
+                .andExpect(jsonPath("$.documentAvailable").value(false));
+        var organization = organizations.findById(id).orElseThrow();
+        assertThat(organization.getDocumentCiphertext()).isNull();
+        assertThat(organization.getFinancialStatus()).isEqualTo(OrganizationFinancialStatus.PENDING);
+        expectError(mvc.perform(patch(review).header(HttpHeaders.AUTHORIZATION, reviewer)
+                .contentType(MediaType.APPLICATION_JSON).content(approved)), 409, review);
+
+        var history = verificationHistory.findAllByOrganizationIdOrderByCreatedDateAscIdAsc(id);
+        assertThat(history).extracting(VerificationHistoryJpaEntity::getNextStatus)
+                .containsExactly(VerificationStatus.IN_REVIEW, VerificationStatus.REJECTED,
+                        VerificationStatus.IN_REVIEW, VerificationStatus.APPROVED);
+        assertThat(history.getFirst().getActorId()).isEqualTo(users.findByEmail(ownerEmail).orElseThrow().getId());
+        assertThat(history.getLast().getActorId()).isEqualTo(users.findByEmail(reviewerEmail).orElseThrow().getId());
     }
 
     private UUID organizationFor(UUID ownerId, String name) {

@@ -17,16 +17,23 @@ import com.projeto.ticket_wave.modules.events.application.port.VenueRepository;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.application.port.CurrentUser;
 import com.projeto.ticket_wave.modules.organizations.application.service.OrganizationOnboardingService;
+import com.projeto.ticket_wave.modules.organizations.domain.OrganizationPermission;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.security.OrganizationAccess;
 import com.projeto.ticket_wave.shared.exception.ForbiddenException;
 import com.projeto.ticket_wave.shared.exception.NotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+
+import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationPermission.EDIT_DRAFTS;
+import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationPermission.MANAGE_EVENTS;
+import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationPermission.READ_EVENTS;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +52,7 @@ public class EventService {
     private final CurrentUser currentUser;
 
     private final OrganizationOnboardingService organizations;
+    private final OrganizationAccess organizationAccess;
 
     public EventResponse createEvent(CreateEventRequest request){
         User organizer = currentUser.getCurrentUser();
@@ -82,7 +90,10 @@ public class EventService {
 
     @Transactional
     public EventResponse updateEvent(UUID id, UpdateEventRequest request){
-        Event event = findManagedEvent(id);
+        Event event = findManagedEvent(id, EDIT_DRAFTS);
+        if (event.getEventStatus() != EventStatus.DRAFT) {
+            organizationAccess.require(event.getOrganizationId(), currentUser.getCurrentUser().getId(), MANAGE_EVENTS);
+        }
 
         event.requireEditable();
         int previousCapacity = event.getCapacity();
@@ -125,9 +136,9 @@ public class EventService {
         return eventMapper.toResponse(findVisibleEvent(id));
     }
 
+    @PreAuthorize("@organizationAccess.allowed(#organizationId, 'READ_REPORTS')")
     public EventReport report(UUID organizationId) {
         UUID userId = currentUser.getCurrentUser().getId();
-        organizations.requireEventManagement(organizationId, userId);
         return new EventReport(organizationId, eventRepository.report(organizationId, userId));
     }
 
@@ -148,9 +159,9 @@ public class EventService {
     public Page<EventSummaryResponse> findMyEvents(UUID organizationId, Pageable pageable) {
         UUID userId = currentUser.getCurrentUser().getId();
         if (organizationId == null) {
-            organizations.requireAnyEventOrganization(userId);
+            organizationAccess.requireAny(userId, READ_EVENTS);
         } else {
-            organizations.requireEventManagement(organizationId, userId);
+            organizationAccess.require(organizationId, userId, READ_EVENTS);
         }
         return eventRepository.findManageableByMember(userId, organizationId, pageable)
                 .map(eventMapper::toSummary);
@@ -161,7 +172,11 @@ public class EventService {
     }
 
     Event findManagedEvent(UUID id) {
-        return eventRepository.findManagedEvent(id, currentUser.getCurrentUser().getId())
+        return findManagedEvent(id, MANAGE_EVENTS);
+    }
+
+    private Event findManagedEvent(UUID id, OrganizationPermission permission) {
+        return eventRepository.findManagedEvent(id, currentUser.getCurrentUser().getId(), permission)
                 .orElseThrow(() -> new ForbiddenException("Você não tem permissão para gerenciar este evento."));
     }
 
