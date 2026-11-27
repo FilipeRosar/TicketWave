@@ -41,7 +41,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(
-                                "/v1/api/auth/**",
+                                "/v1/api/auth/register",
+                                "/v1/api/auth/login",
+                                "/v1/api/auth/refresh",
+                                "/v1/api/auth/logout",
                                 "/swagger-ui/**",
                                 "/swagger-ui.html",
                                 "/docs",

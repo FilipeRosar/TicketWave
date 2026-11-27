@@ -8,7 +8,10 @@ services:
       SERVER_PORT: 8080
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-ticketwave}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-postgres}
-      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no .env}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Defina AWS_ACCESS_KEY_ID no .env}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Defina AWS_SECRET_ACCESS_KEY no .env}
       STORAGE_ENDPOINT: http://localstack:4566
       STORAGE_REGION: ${STORAGE_REGION:-us-east-1}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-ticketwave-images}
@@ -33,7 +36,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-ticketwave}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no .env}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -62,8 +65,8 @@ services:
     environment:
       SERVICES: s3
       AWS_DEFAULT_REGION: ${STORAGE_REGION:-us-east-1}
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:?Defina AWS_ACCESS_KEY_ID no .env}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:?Defina AWS_SECRET_ACCESS_KEY no .env}
       STORAGE_BUCKET: ${STORAGE_BUCKET:-ticketwave-images}
     volumes:
       - ./infra/init-s3.sh:/etc/localstack/init/ready.d/init-s3.sh:ro,Z

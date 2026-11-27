@@ -20,11 +20,10 @@ public class S3Config {
                 .endpointOverride(URI.create(properties.getEndpoint()))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(
-                                "test",
-                                "test"
+                                properties.getAccessKey(),
+                                properties.getSecretKey()
                         )
-                    )
-                )
+                ))
                 .region(Region.of(properties.getRegion()))
                 .forcePathStyle(true)
                 .build();

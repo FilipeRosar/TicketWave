@@ -47,8 +47,10 @@ class ApiErrorTests {
     @Test
     void registersLogsInRotatesAndRevokesTokens() throws Exception {
         String auth = "/v1/api/auth";
-        String protectedPath = "/users/me";
+        String protectedPath = auth + "/me";
         expectError(mvc.perform(get(protectedPath)), 401, protectedPath);
+        expectError(mvc.perform(get(protectedPath).header(HttpHeaders.AUTHORIZATION, "Bearer invalid-token")),
+                401, protectedPath).andExpect(jsonPath("$.message").value("Token inválido"));
         mvc.perform(post(auth + "/register").contentType(MediaType.APPLICATION_JSON)
                 .content("""
                         {"name":"JWT Test","email":"jwt-flow@example.test","password":"test-password","phone":"11944445555"}

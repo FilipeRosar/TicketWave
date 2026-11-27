@@ -6,7 +6,13 @@ O [documento do projeto](docs/TicketWave%20Documenta%C3%A7%C3%A3o%20do%20Projeto
 
 ## Executar localmente
 
-Com o Docker e o plugin Docker Compose instalados, execute na raiz do repositório.
+Com o Docker e o plugin Docker Compose instalados, execute na raiz do repositório. Na primeira configuração, crie o arquivo local com `cp .env.exemple .env` e preencha os campos vazios antes de iniciar os serviços.
+
+- Gere `POSTGRES_PASSWORD` com `openssl rand -hex 32`.
+- Gere `JWT_SECRET` com `openssl rand -base64 64 | tr -d '\n'`.
+- Use `test` em `AWS_ACCESS_KEY_ID` e `AWS_SECRET_ACCESS_KEY` para o LocalStack.
+
+O Git ignora `.env`. Se já houver um volume PostgreSQL, use a senha existente no arquivo ou altere a senha no banco antes de atualizar o arquivo. Ao trocar a chave JWT, os tokens de acesso emitidos com a chave antiga deixam de ser válidos.
 
 ```sh
 docker compose up -d --wait
@@ -23,7 +29,7 @@ O Compose compila a API, inicia PostgreSQL, Redis e LocalStack e aguarda a cria�
 | Redis | `localhost:6379` |
 | LocalStack | `localhost:4566` |
 
-Para personalizar portas, credenciais locais, nome do bucket ou região, copie [`.env.example`](.env.example) para `.env` e ajuste os valores. O PostgreSQL usa as credenciais configuradas na primeira inicialização do volume.
+Ajuste as portas, o nome do bucket e a região em `.env`. Os modelos [`.env.exemple`](.env.exemple) e [`.env.example`](.env.example) têm os mesmos campos.
 
 ```sh
 docker compose logs -f app
