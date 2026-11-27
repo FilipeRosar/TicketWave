@@ -12,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationMemberRole.EVENT_MANAGERS;
+
 @Repository
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -21,8 +23,8 @@ class EventImagePersistenceAdapter implements EventImageRepository {
     private final JpaEntityAccess entities;
 
     @Override
-    public Optional<EventImage> findById(UUID id) {
-        return repository.findById(id).map(mapper::toDomain);
+    public Optional<EventImage> findManagedImage(UUID id, UUID userId) {
+        return repository.findManagedImage(id, userId, EVENT_MANAGERS).map(mapper::toDomain);
     }
 
     @Override

@@ -6,7 +6,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface EventImageRepository {
-    Optional<EventImage> findById(UUID id);
+    Optional<EventImage> findManagedImage(UUID id, UUID userId);
 
     List<EventImage> findByEventId(UUID eventId);
 

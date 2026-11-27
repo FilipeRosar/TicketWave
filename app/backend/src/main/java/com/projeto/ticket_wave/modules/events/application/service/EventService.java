@@ -1,6 +1,7 @@
 package com.projeto.ticket_wave.modules.events.application.service;
 
 import com.projeto.ticket_wave.modules.events.application.dto.CreateEventRequest;
+import com.projeto.ticket_wave.modules.events.application.dto.EventReport;
 import com.projeto.ticket_wave.modules.events.application.dto.EventResponse;
 import com.projeto.ticket_wave.modules.events.application.dto.EventSummaryResponse;
 import com.projeto.ticket_wave.modules.events.application.dto.UpdateEventRequest;
@@ -16,6 +17,7 @@ import com.projeto.ticket_wave.modules.events.application.port.VenueRepository;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.application.port.CurrentUser;
 import com.projeto.ticket_wave.modules.organizations.application.service.OrganizationOnboardingService;
+import com.projeto.ticket_wave.shared.exception.ForbiddenException;
 import com.projeto.ticket_wave.shared.exception.NotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -120,23 +122,15 @@ public class EventService {
     }
 
     public EventResponse findVisibleById(UUID id) {
-        Event event = findEntity(id);
-        if (!event.isPublishedInCatalog()
-                && !organizations.canManageEvents(event.getOrganizationId(), currentUser.getCurrentUser().getId())) {
-            throw new NotFoundException("Evento não encontrado");
-        }
-        return eventMapper.toResponse(event);
+        return eventMapper.toResponse(findVisibleEvent(id));
     }
 
-    public EventResponse findById(UUID id){
-        return eventMapper.toResponse(findEntity(id));
+    public EventReport report(UUID organizationId) {
+        UUID userId = currentUser.getCurrentUser().getId();
+        organizations.requireEventManagement(organizationId, userId);
+        return new EventReport(organizationId, eventRepository.report(organizationId, userId));
     }
-    @Transactional
-    public EventResponse findBySlug(String slug){
-        Event event = eventRepository.findBySlugIgnoreCase(slug)
-                .orElseThrow(() -> new NotFoundException("Evento não encontrado"));
-        return eventMapper.toResponse(event);
-    }
+
     @Transactional
     public Page<EventSummaryResponse> findAll(Pageable pageable){
         return eventRepository
@@ -149,11 +143,6 @@ public class EventService {
         Event event = findManagedEvent(id);
         event.requireDeletable();
         eventRepository.delete(event);
-    }
-
-    public Page<EventSummaryResponse> search(EventSearchCriteria search, Pageable pageable){
-        return eventRepository.search(search, pageable)
-                .map(eventMapper::toSummary);
     }
 
     public Page<EventSummaryResponse> findMyEvents(UUID organizationId, Pageable pageable) {
@@ -171,15 +160,13 @@ public class EventService {
         return eventRepository.searchPublished(search, pageable).map(eventMapper::toSummary);
     }
 
-    private Event findManagedEvent(UUID id) {
-        Event event = findEntity(id);
-        organizations.requireEventManagement(event.getOrganizationId(), currentUser.getCurrentUser().getId());
-        return event;
+    Event findManagedEvent(UUID id) {
+        return eventRepository.findManagedEvent(id, currentUser.getCurrentUser().getId())
+                .orElseThrow(() -> new ForbiddenException("Você não tem permissão para gerenciar este evento."));
     }
 
-    private Event findEntity(UUID id){
-        return eventRepository.findById(id)
+    Event findVisibleEvent(UUID id) {
+        return eventRepository.findVisibleEvent(id, currentUser.getCurrentUser().getId())
                 .orElseThrow(() -> new NotFoundException("Evento não encontrado"));
     }
-
 }

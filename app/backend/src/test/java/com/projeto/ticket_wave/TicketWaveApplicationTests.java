@@ -1,8 +1,6 @@
 package com.projeto.ticket_wave;
 
 import com.projeto.ticket_wave.modules.events.application.port.EventRepository;
-import com.projeto.ticket_wave.modules.events.application.dto.EventSummaryResponse;
-import com.projeto.ticket_wave.modules.events.application.service.EventService;
 import com.projeto.ticket_wave.modules.events.domain.entity.Category;
 import com.projeto.ticket_wave.modules.events.domain.entity.Event;
 import com.projeto.ticket_wave.modules.events.domain.entity.Venue;
@@ -52,9 +50,6 @@ class TicketWaveApplicationTests {
 
     @Autowired
     private EventRepository events;
-
-    @Autowired
-    private EventService eventService;
 
     @Autowired
     private UserRepository users;
@@ -246,12 +241,12 @@ class TicketWaveApplicationTests {
                 null, true, true, true, start.toLocalDate(), start.toLocalDate(),
                 null, null, null, null, null, EventSort.PRICE_DESC);
 
-        var results = eventService.search(criteria, PageRequest.of(0, 10));
-        assertThat(results.getContent()).extracting(EventSummaryResponse::id)
+        var results = events.search(criteria, PageRequest.of(0, 10));
+        assertThat(results.getContent()).extracting(Event::getId)
                 .containsExactly(premium.getId(), event.getId());
         assertThat(results.getContent()).allSatisfy(result -> {
-            assertThat(result.city()).isEqualTo("São Paulo");
-            assertThat(result.status()).isEqualTo(EventStatus.DRAFT);
+            assertThat(result.getVenue().getAddress().getCity()).isEqualTo("São Paulo");
+            assertThat(result.getEventStatus()).isEqualTo(EventStatus.DRAFT);
         });
 
         assertThatThrownBy(() -> events.save(event)).isInstanceOf(ObjectOptimisticLockingFailureException.class);

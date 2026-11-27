@@ -1,5 +1,6 @@
 package com.projeto.ticket_wave.modules.events.infrastructure.persistence;
 
+import com.projeto.ticket_wave.modules.events.application.dto.EventReportRow;
 import com.projeto.ticket_wave.modules.events.application.port.EventRepository;
 import com.projeto.ticket_wave.modules.events.domain.entity.Event;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventSort;
@@ -9,6 +10,7 @@ import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.VenueJpaEntity;
 import com.projeto.ticket_wave.modules.identity.infrastructure.persistence.entity.UserJpaEntity;
 import com.projeto.ticket_wave.shared.persistence.JpaEntityAccess;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,21 @@ class EventPersistenceAdapter implements EventRepository {
     @Override
     public Optional<Event> findById(UUID id) {
         return repository.findById(id).map(mapper::toDomainWithImages);
+    }
+
+    @Override
+    public Optional<Event> findManagedEvent(UUID id, UUID userId) {
+        return repository.findManagedEvent(id, userId, EVENT_MANAGERS).map(mapper::toDomainWithImages);
+    }
+
+    @Override
+    public Optional<Event> findVisibleEvent(UUID id, UUID userId) {
+        return repository.findVisibleEvent(id, userId, EVENT_MANAGERS).map(mapper::toDomainWithImages);
+    }
+
+    @Override
+    public List<EventReportRow> report(UUID organizationId, UUID userId) {
+        return repository.report(organizationId, userId, EVENT_MANAGERS);
     }
 
     @Override

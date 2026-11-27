@@ -1,5 +1,6 @@
 package com.projeto.ticket_wave.modules.events.infrastructure.persistence;
 
+import com.projeto.ticket_wave.modules.events.application.dto.EventReportRow;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.EventJpaEntity;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventStatus;
 import com.projeto.ticket_wave.modules.events.domain.enums.EventType;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Repository;
 
 import java.math.BigDecimal;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -25,18 +27,35 @@ public interface EventJpaRepository extends JpaRepository<EventJpaEntity, UUID>,
     Optional<EventJpaEntity> findBySlugIgnoreCase(String slug);
     boolean existsBySlug(String slug);
     Page<EventJpaEntity> findByPublishedTrue(Pageable pageable);
-    @Query("""
-            SELECT e FROM Event e
-            WHERE (:organizationId IS NULL OR e.organizationId = :organizationId)
-              AND EXISTS (
-                  SELECT 1 FROM OrganizationMemberJpaEntity member, OrganizationJpaEntity organization
-                  WHERE organization.id = e.organizationId AND organization.status = 'ACTIVE'
-                    AND member.organizationId = organization.id AND member.userId = :userId
-                    AND member.role IN :roles AND member.status = 'ACTIVE'
-              )
-            """)
+    String MANAGED_ORGANIZATION = """
+            EXISTS (
+                SELECT 1 FROM OrganizationMemberJpaEntity member, OrganizationJpaEntity organization
+                WHERE organization.id = e.organizationId AND organization.status = 'ACTIVE'
+                  AND member.organizationId = organization.id AND member.userId = :userId
+                  AND member.role IN :roles AND member.status = 'ACTIVE'
+            )
+            """;
+
+    @Query("SELECT e FROM Event e WHERE e.id = :id AND " + MANAGED_ORGANIZATION)
+    Optional<EventJpaEntity> findManagedEvent(UUID id, UUID userId, Set<OrganizationMemberRole> roles);
+
+    @Query("SELECT e FROM Event e WHERE e.id = :id AND ((e.published = true AND e.eventStatus = 'PUBLISHED') OR "
+            + MANAGED_ORGANIZATION + ")")
+    Optional<EventJpaEntity> findVisibleEvent(UUID id, UUID userId, Set<OrganizationMemberRole> roles);
+
+    @Query("SELECT e FROM Event e WHERE (:organizationId IS NULL OR e.organizationId = :organizationId) AND "
+            + MANAGED_ORGANIZATION)
     Page<EventJpaEntity> findManageableByMember(
             UUID userId, UUID organizationId, Set<OrganizationMemberRole> roles, Pageable pageable);
+
+    @Query("""
+            SELECT new com.projeto.ticket_wave.modules.events.application.dto.EventReportRow(
+                e.eventStatus, COUNT(e), SUM(e.totalTicketsSold))
+            FROM Event e
+            WHERE e.organizationId = :organizationId AND
+            """ + MANAGED_ORGANIZATION + " GROUP BY e.eventStatus ORDER BY e.eventStatus")
+    List<EventReportRow> report(UUID organizationId, UUID userId, Set<OrganizationMemberRole> roles);
+
     Page<EventJpaEntity> findByCategoryId(UUID categoryId, Pageable pageable);
     Page<EventJpaEntity> findByEventStatus(EventStatus eventStatus, Pageable pageable);
 

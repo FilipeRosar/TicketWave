@@ -2,10 +2,13 @@ package com.projeto.ticket_wave;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.projeto.ticket_wave.modules.events.application.port.EventImageRepository;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.CategoryJpaRepository;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.VenueJpaRepository;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.AddressJpaEntity;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.CategoryJpaEntity;
+import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.EventImageJpaEntity;
+import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.EventJpaEntity;
 import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.VenueJpaEntity;
 import com.projeto.ticket_wave.modules.identity.application.port.UserRepository;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
@@ -115,6 +118,9 @@ class ApiErrorTests {
 
     @Autowired
     private VenueJpaRepository venues;
+
+    @Autowired
+    private EventImageRepository eventImages;
 
     @Autowired
     private OrganizationJpaRepository organizations;
@@ -861,11 +867,14 @@ class ApiErrorTests {
         String owner = bearerFor("org-event-owner@example.test", "11999998421", Role.ROLE_CUSTOMER);
         String admin = bearerFor("org-event-admin@example.test", "11999998422", Role.ROLE_CUSTOMER);
         String finance = bearerFor("org-event-finance@example.test", "11999998423", Role.ROLE_CUSTOMER);
+        String secondOwner = bearerFor("org-event-second-owner@example.test", "11999998424", Role.ROLE_CUSTOMER);
+        String unaffiliated = bearerFor("org-event-unaffiliated@example.test", "11999998425", Role.ROLE_ADMIN);
+        UUID secondOwnerId = users.findByEmail("org-event-second-owner@example.test").orElseThrow().getId();
         UUID ownerId = users.findByEmail("org-event-owner@example.test").orElseThrow().getId();
         UUID adminId = users.findByEmail("org-event-admin@example.test").orElseThrow().getId();
         UUID financeId = users.findByEmail("org-event-finance@example.test").orElseThrow().getId();
         UUID organizationId = organizationFor(ownerId, "Organização A");
-        UUID otherOrganizationId = organizationFor(ownerId, "Organização B");
+        UUID otherOrganizationId = organizationFor(secondOwnerId, "Organização B");
         organizationMembers.saveAndFlush(new OrganizationMemberJpaEntity(organizationId, adminId, OrganizationMemberRole.ADMIN));
         organizationMembers.saveAndFlush(new OrganizationMemberJpaEntity(organizationId, financeId, OrganizationMemberRole.FINANCEIRO));
 
@@ -883,6 +892,74 @@ class ApiErrorTests {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
         UUID eventId = UUID.fromString(json.readTree(created).get("id").asText());
         String item = path + "/" + eventId;
+        String otherBody = mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, secondOwner)
+                .contentType(MediaType.APPLICATION_JSON).content(event.deepCopy().put("title", "Evento privado da organização B")
+                        .put("organizationId", otherOrganizationId.toString()).toString()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        UUID otherEventId = UUID.fromString(json.readTree(otherBody).get("id").asText());
+        String otherItem = path + "/" + otherEventId;
+
+        var image = new EventImageJpaEntity();
+        image.setEvent(entityManager.getReference(EventJpaEntity.class, otherEventId));
+        image.setImageUrl("https://storage.example.test/banner.png");
+        image.setImageKey("fixture/banner.png");
+        image.setCover(true);
+        image.setDisplayOrder(1);
+        image.setWidth(10);
+        image.setHeight(10);
+        image.setSize(100L);
+        image.setFileName("banner.png");
+        image.setContentType("image/png");
+        entityManager.persist(image);
+        entityManager.flush();
+        assertThat(eventImages.findManagedImage(image.getId(), adminId)).isEmpty();
+        assertThat(eventImages.findManagedImage(image.getId(), secondOwnerId)).isPresent();
+
+        entityManager.createQuery("UPDATE Event e SET e.totalTicketsSold = 3 WHERE e.id = :id")
+                .setParameter("id", eventId).executeUpdate();
+        entityManager.createQuery("UPDATE Event e SET e.totalTicketsSold = 9 WHERE e.id = :id")
+                .setParameter("id", otherEventId).executeUpdate();
+        entityManager.clear();
+
+        expectError(mvc.perform(get(otherItem).header(HttpHeaders.AUTHORIZATION, admin)), 404, otherItem);
+        expectError(mvc.perform(get(item).header(HttpHeaders.AUTHORIZATION, secondOwner)), 404, item);
+        expectError(mvc.perform(get(item).header(HttpHeaders.AUTHORIZATION, unaffiliated)), 404, item);
+        expectError(mvc.perform(put(otherItem).header(HttpHeaders.AUTHORIZATION, admin)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"title":"Título indevido"}
+                        """)), 403, otherItem);
+        expectError(mvc.perform(patch(otherItem + "/publish").header(HttpHeaders.AUTHORIZATION, admin)),
+                403, otherItem + "/publish");
+        expectError(mvc.perform(patch(otherItem + "/cancel").header(HttpHeaders.AUTHORIZATION, admin)),
+                403, otherItem + "/cancel");
+        expectError(mvc.perform(delete(otherItem).header(HttpHeaders.AUTHORIZATION, admin)), 403, otherItem);
+        mvc.perform(get(otherItem).header(HttpHeaders.AUTHORIZATION, secondOwner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eventStatus").value("DRAFT"))
+                .andExpect(jsonPath("$.title").value("Evento privado da organização B"));
+
+        String report = "/v1/api/organizations/" + organizationId + "/reports/events";
+        String otherReport = "/v1/api/organizations/" + otherOrganizationId + "/reports/events";
+        expectError(mvc.perform(get(report)), 401, report);
+        expectError(mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, unaffiliated)), 403, report);
+        expectError(mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, finance)), 403, report);
+        expectError(mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, secondOwner)), 403, report);
+        expectError(mvc.perform(get(otherReport).header(HttpHeaders.AUTHORIZATION, admin)), 403, otherReport);
+        mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk()).andExpect(header().string(HttpHeaders.CACHE_CONTROL, "no-store"))
+                .andExpect(jsonPath("$.organizationId").value(organizationId.toString()))
+                .andExpect(jsonPath("$.byStatus.length()").value(1))
+                .andExpect(jsonPath("$.byStatus[0].status").value("DRAFT"))
+                .andExpect(jsonPath("$.byStatus[0].events").value(1))
+                .andExpect(jsonPath("$.byStatus[0].ticketsSold").value(3));
+        mvc.perform(get(otherReport).header(HttpHeaders.AUTHORIZATION, secondOwner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.byStatus.length()").value(1))
+                .andExpect(jsonPath("$.byStatus[0].events").value(1))
+                .andExpect(jsonPath("$.byStatus[0].ticketsSold").value(9));
+        mvc.perform(get(path + "/mine").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].organizationId").value(organizationId.toString()));
+
         mvc.perform(get(path + "/mine").header(HttpHeaders.AUTHORIZATION, admin)
                 .param("organizationId", organizationId.toString()))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(eventId.toString()));
@@ -896,12 +973,15 @@ class ApiErrorTests {
 
         mvc.perform(put(item).header(HttpHeaders.AUTHORIZATION, admin)
                 .contentType(MediaType.APPLICATION_JSON).content("""
-                        {"title":"Editado pela equipe"}
-                        """))
+                        {"title":"Editado pela equipe","organizationId":"%s"}
+                        """.formatted(otherOrganizationId)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Editado pela equipe"))
                 .andExpect(jsonPath("$.organizationId").value(organizationId.toString()));
         mvc.perform(patch(item + "/publish").header(HttpHeaders.AUTHORIZATION, admin))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.published").value(true));
+        mvc.perform(get(item).header(HttpHeaders.AUTHORIZATION, secondOwner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.published").value(true));
+        expectError(mvc.perform(get(report).header(HttpHeaders.AUTHORIZATION, secondOwner)), 403, report);
 
         assertThat(entityManager.createQuery("SELECT e.publishedBy.id FROM Event e WHERE e.id = :id", UUID.class)
                 .setParameter("id", eventId).getSingleResult()).isEqualTo(adminId);

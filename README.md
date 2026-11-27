@@ -74,6 +74,8 @@ A publicação exige data de início futura. O término deve ser posterior ao in
 
 Na criação, informe `organizationId`. A migração V22 gera uma organização de legado por responsável de eventos que ainda não tinham vínculo, registra o mapeamento em `legacy_event_organization_map` e preserva os vínculos já definidos. Para responsáveis mapeados, requisições de criação sem `organizationId` usam a organização de legado. A migração preserva o autor, o responsável pela publicação e os registros associados aos eventos existentes.
 
+O relatório `GET /v1/api/organizations/{organizationId}/reports/events` retorna contagens de eventos e ingressos vendidos agrupadas por status para a organização selecionada. O acesso exige vínculo ativo como `OWNER` ou `ADMIN` na organização. O catálogo de eventos publicados continua acessível a outras contas autenticadas.
+
 Nas rotas de criação e edição, use `classification` com `PROFESSIONAL` ou `SOCIAL`. O campo `eventType` mantém o formato presencial, online ou híbrido, e `categoryId` identifica a categoria do evento. Cadastros anteriores e requisições de criação sem classificação usam `SOCIAL`.
 
 Com networking habilitado, o detalhe retorna `MEETING_AGENDA` e `ROOMS` para eventos profissionais, ou `WALL` e `GROUPS` para eventos sociais. A vitrine exibe esses recursos no detalhe dos eventos publicados para usuários autenticados.
