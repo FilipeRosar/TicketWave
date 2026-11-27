@@ -5,6 +5,7 @@ import jakarta.servlet.DispatcherType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
@@ -53,6 +54,9 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
+                        .requestMatchers(HttpMethod.POST, "/v1/api/event").hasRole("ORGANIZER")
+                        .requestMatchers(HttpMethod.PUT, "/v1/api/event/{id}").hasRole("ORGANIZER")
+                        .requestMatchers(HttpMethod.DELETE, "/v1/api/event/{id}").hasRole("ORGANIZER")
                         .anyRequest()
                         .authenticated())
                 .authenticationProvider(authenticationProvider())

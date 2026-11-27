@@ -1,6 +1,11 @@
 package com.projeto.ticket_wave;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.projeto.ticket_wave.modules.events.infrastructure.persistence.CategoryJpaRepository;
+import com.projeto.ticket_wave.modules.events.infrastructure.persistence.VenueJpaRepository;
+import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.AddressJpaEntity;
+import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.CategoryJpaEntity;
+import com.projeto.ticket_wave.modules.events.infrastructure.persistence.entity.VenueJpaEntity;
 import com.projeto.ticket_wave.modules.identity.application.port.UserRepository;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
@@ -24,8 +29,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -46,6 +53,12 @@ class ApiErrorTests {
 
     @Autowired
     private ObjectMapper json;
+
+    @Autowired
+    private CategoryJpaRepository categories;
+
+    @Autowired
+    private VenueJpaRepository venues;
 
     @Test
     void registersLogsInRotatesAndRevokesTokens() throws Exception {
@@ -194,12 +207,68 @@ class ApiErrorTests {
         expectError(mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, customerToken)
                 .contentType(MediaType.APPLICATION_JSON).content(event)), 403, eventPath);
 
+        expectError(mvc.perform(post(eventPath).contentType(MediaType.APPLICATION_JSON).content(event)), 401, eventPath);
+
+        String adminToken = bearerFor("admin-role@example.test", "11999991111", Role.ROLE_ADMIN);
+        expectError(mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, adminToken)
+                .contentType(MediaType.APPLICATION_JSON).content(event)), 403, eventPath);
+
         user.setRole(Role.ROLE_ORGANIZER);
         User organizer = users.save(user);
         String organizerToken = "Bearer " + jwtService.generateToken(new CustomUserDetails(organizer));
         expectError(mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
                 .contentType(MediaType.APPLICATION_JSON).content(event.replace("\"capacity\": 100", "\"capacity\": 0"))),
                 400, eventPath).andExpect(jsonPath("$.violations[0].field").value("capacity"));
+
+        CategoryJpaEntity category = new CategoryJpaEntity();
+        category.setName("Autorização");
+        category.setSlug("autorizacao");
+        AddressJpaEntity address = new AddressJpaEntity();
+        address.setStreet("Rua de teste");
+        address.setNumber("1");
+        address.setDistrict("Centro");
+        address.setCity("São Paulo");
+        address.setState("SP");
+        address.setZipCode("01000-000");
+        VenueJpaEntity venue = new VenueJpaEntity();
+        venue.setName("Auditório de teste");
+        venue.setSlug("auditorio-de-teste");
+        venue.setCapacity(100);
+        venue.setAddress(address);
+        String validEvent = event.replace("00000000-0000-0000-0000-000000000001", categories.save(category).getId().toString())
+                .replace("00000000-0000-0000-0000-000000000002", venues.save(venue).getId().toString());
+        String created = mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON).content(validEvent))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String itemPath = eventPath + "/" + json.readTree(created).get("id").asText();
+
+        String participantToken = bearerFor("participant-role@example.test", "11999992222", Role.ROLE_CUSTOMER);
+        String otherOrganizerToken = bearerFor("organizer-role@example.test", "11999993333", Role.ROLE_ORGANIZER);
+        mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, participantToken)).andExpect(status().isOk());
+        expectError(mvc.perform(put(itemPath).contentType(MediaType.APPLICATION_JSON).content("{}")), 401, itemPath);
+        expectError(mvc.perform(delete(itemPath)), 401, itemPath);
+        for (String deniedToken : new String[]{ participantToken, adminToken, otherOrganizerToken }) {
+            expectError(mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, deniedToken)
+                    .contentType(MediaType.APPLICATION_JSON).content("{}")), 403, itemPath);
+            expectError(mvc.perform(delete(itemPath).header(HttpHeaders.AUTHORIZATION, deniedToken)), 403, itemPath);
+        }
+
+        mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"title\":\"Evento atualizado\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Evento atualizado"));
+        mvc.perform(delete(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken))
+                .andExpect(status().isNoContent());
+        expectError(mvc.perform(get(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)), 404, itemPath);
+    }
+
+    private String bearerFor(String email, String phone, Role role) {
+        User user = new User();
+        user.setName("Test user");
+        user.setEmail(email);
+        user.setPassword("test-hash");
+        user.setPhone(phone);
+        user.setRole(role);
+        return "Bearer " + jwtService.generateToken(new CustomUserDetails(users.save(user)));
     }
 
     private ResultActions expectError(ResultActions response, int code, String path) throws Exception {
