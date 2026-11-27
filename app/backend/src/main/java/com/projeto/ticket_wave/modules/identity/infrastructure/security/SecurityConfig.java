@@ -57,11 +57,6 @@ public class SecurityConfig {
                                 "/actuator/health",
                                 "/actuator/info"
                         ).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/v1/api/event").hasRole("ORGANIZER")
-                        .requestMatchers(HttpMethod.GET, "/v1/api/event/mine").hasRole("ORGANIZER")
-                        .requestMatchers(HttpMethod.PATCH, "/v1/api/event/{id}/publish", "/v1/api/event/{id}/cancel").hasRole("ORGANIZER")
-                        .requestMatchers(HttpMethod.PUT, "/v1/api/event/{id}").hasRole("ORGANIZER")
-                        .requestMatchers(HttpMethod.DELETE, "/v1/api/event/{id}").hasRole("ORGANIZER")
                         .anyRequest()
                         .authenticated())
                 .authenticationProvider(authenticationProvider())

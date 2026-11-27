@@ -8,6 +8,7 @@ import com.projeto.ticket_wave.shared.persistence.JpaBaseEntity;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.UUID;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -95,6 +96,9 @@ public class EventJpaEntity extends JpaBaseEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organizer_id")
     private UserJpaEntity organizer;
+
+    @Column(name = "organization_id", nullable = false)
+    private UUID organizationId;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "venue_id")

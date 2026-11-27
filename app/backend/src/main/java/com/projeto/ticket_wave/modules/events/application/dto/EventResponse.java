@@ -54,6 +54,8 @@ public record EventResponse(
 
         String organizer,
 
+        UUID organizationId,
+
         String category,
 
         String venue

@@ -15,7 +15,7 @@ import com.projeto.ticket_wave.modules.events.application.port.EventRepository;
 import com.projeto.ticket_wave.modules.events.application.port.VenueRepository;
 import com.projeto.ticket_wave.modules.identity.domain.entity.User;
 import com.projeto.ticket_wave.modules.identity.application.port.CurrentUser;
-import com.projeto.ticket_wave.shared.exception.ForbiddenException;
+import com.projeto.ticket_wave.modules.organizations.application.service.OrganizationOnboardingService;
 import com.projeto.ticket_wave.shared.exception.NotFoundException;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -42,13 +42,15 @@ public class EventService {
 
     private final CurrentUser currentUser;
 
+    private final OrganizationOnboardingService organizations;
+
     public EventResponse createEvent(CreateEventRequest request){
+        User organizer = currentUser.getCurrentUser();
+        UUID organizationId = organizations.eventOrganization(request.organizationId(), organizer.getId());
         Category category = categoryRepository.findById(request.categoryId())
                 .orElseThrow(() -> new NotFoundException("Categoria não encontrada"));
         Venue venue = venueRepository.findById(request.venueId())
                 .orElseThrow(() -> new NotFoundException("Local não encontrado"));
-
-        User organizer = currentUser.getCurrentUser();
 
         Event event = eventMapper.toEntity(request);
 
@@ -57,6 +59,7 @@ public class EventService {
         event.setVenue(venue);
 
         event.setOrganizer(organizer);
+        event.setOrganizationId(organizationId);
 
         event.setSlug(slugService.generate(request.title()));
 
@@ -77,10 +80,14 @@ public class EventService {
 
     @Transactional
     public EventResponse updateEvent(UUID id, UpdateEventRequest request){
-        Event event = findOwnedEvent(id);
+        Event event = findManagedEvent(id);
 
         event.requireEditable();
         int previousCapacity = event.getCapacity();
+        if (event.isPublishedInCatalog() && request.ticketPrice() != null && request.ticketPrice().signum() > 0
+                && request.ticketPrice().compareTo(event.getTicketPrice()) != 0) {
+            organizations.requireFinancialApproval(event.getOrganizationId());
+        }
         eventMapper.updateEvent(request, event);
         event.validateDates();
         if (request.capacity() != null) event.updateCapacity(previousCapacity);
@@ -98,14 +105,15 @@ public class EventService {
         return eventMapper.toResponse(eventRepository.save(event));
     }
     public EventResponse publishEvent(UUID id) {
-        Event event = findOwnedEvent(id);
+        Event event = findManagedEvent(id);
         if (event.isPublishedInCatalog()) return eventMapper.toResponse(event);
-        event.publish(LocalDateTime.now());
+        event.publish(LocalDateTime.now(), currentUser.getCurrentUser());
+        if (event.getTicketPrice().signum() > 0) organizations.requireFinancialApproval(event.getOrganizationId());
         return eventMapper.toResponse(eventRepository.save(event));
     }
 
     public EventResponse cancelEvent(UUID id) {
-        Event event = findOwnedEvent(id);
+        Event event = findManagedEvent(id);
         if (event.getEventStatus() == EventStatus.CANCELLED) return eventMapper.toResponse(event);
         event.cancel();
         return eventMapper.toResponse(eventRepository.save(event));
@@ -114,7 +122,7 @@ public class EventService {
     public EventResponse findVisibleById(UUID id) {
         Event event = findEntity(id);
         if (!event.isPublishedInCatalog()
-                && !event.getOrganizer().getId().equals(currentUser.getCurrentUser().getId())) {
+                && !organizations.canManageEvents(event.getOrganizationId(), currentUser.getCurrentUser().getId())) {
             throw new NotFoundException("Evento não encontrado");
         }
         return eventMapper.toResponse(event);
@@ -138,7 +146,7 @@ public class EventService {
 
     @Transactional
     public void deleteEvent(UUID id){
-        Event event = findOwnedEvent(id);
+        Event event = findManagedEvent(id);
         event.requireDeletable();
         eventRepository.delete(event);
     }
@@ -148,8 +156,14 @@ public class EventService {
                 .map(eventMapper::toSummary);
     }
 
-    public Page<EventSummaryResponse> findMyEvents(Pageable pageable) {
-        return eventRepository.findByOrganizer(currentUser.getCurrentUser().getId(), pageable)
+    public Page<EventSummaryResponse> findMyEvents(UUID organizationId, Pageable pageable) {
+        UUID userId = currentUser.getCurrentUser().getId();
+        if (organizationId == null) {
+            organizations.requireAnyEventOrganization(userId);
+        } else {
+            organizations.requireEventManagement(organizationId, userId);
+        }
+        return eventRepository.findManageableByMember(userId, organizationId, pageable)
                 .map(eventMapper::toSummary);
     }
 
@@ -157,11 +171,9 @@ public class EventService {
         return eventRepository.searchPublished(search, pageable).map(eventMapper::toSummary);
     }
 
-    private Event findOwnedEvent(UUID id) {
+    private Event findManagedEvent(UUID id) {
         Event event = findEntity(id);
-        if (!event.getOrganizer().getId().equals(currentUser.getCurrentUser().getId())) {
-            throw new ForbiddenException("Somente o organizador responsável pode gerenciar este evento.");
-        }
+        organizations.requireEventManagement(event.getOrganizationId(), currentUser.getCurrentUser().getId());
         return event;
     }
 

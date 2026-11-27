@@ -296,4 +296,61 @@ describe('Navegação do TicketWave', () => {
     expect(await open('social', 'Encontro social', [])).toEqual([]);
     http.verify();
   });
+
+  it('retoma o perfil comercial e as pendências da organização', async () => {
+    const http = TestBed.inject(HttpTestingController);
+    const session = TestBed.inject(AuthSession);
+    const login = session.login('teste@example.test', 'minha-senha');
+    http.expectOne('/v1/api/auth/login').flush({ accessToken: 'access', refreshToken: 'refresh', expiresIn: 3600000 });
+    await Promise.resolve();
+    http.expectOne('/v1/api/auth/me').flush({
+      name: 'Pessoa Teste', email: 'teste@example.test', role: 'ROLE_CUSTOMER',
+    });
+    await login;
+
+    const harness = await RouterTestingHarness.create('/organizador');
+    const path = '/v1/api/organizations';
+    const render = async () => {
+      await Promise.resolve();
+      harness.detectChanges();
+    };
+    http.expectOne(path + '/onboarding').flush([]);
+    await render();
+    const page = harness.routeNativeElement!;
+    const registration = page.querySelector('form')!;
+    (registration.elements.namedItem('name') as HTMLInputElement).value = 'Eventos da Cidade';
+    registration.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const create = http.expectOne(path);
+    expect(create.request.headers.get('Authorization')).toBe('Bearer access');
+    expect(create.request.body).toMatchObject({ name: 'Eventos da Cidade', type: 'PF' });
+    create.flush({ id: 'organization-one' }, { status: 201, statusText: 'Created' });
+    await render();
+
+    const organization = {
+      id: 'organization-one', name: 'Eventos da Cidade', type: 'PF',
+      commercialName: null, contactEmail: null, description: null, financialStatus: 'PENDING',
+      pending: ['COMMERCIAL_NAME', 'CONTACT_EMAIL', 'FINANCIAL_APPROVAL'],
+    };
+    http.expectOne(path + '/onboarding').flush([organization]);
+    await render();
+    expect(page.textContent).toContain('Habilitação pendente');
+    const profile = page.querySelector('form')!;
+    (profile.elements.namedItem('commercialName') as HTMLInputElement).value = 'Agenda da Cidade';
+    profile.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    const update = http.expectOne(path + '/organization-one/commercial-profile');
+    expect(update.request.body).toEqual({ commercialName: 'Agenda da Cidade', contactEmail: null, description: null });
+    const saved = { ...organization, commercialName: 'Agenda da Cidade', pending: ['CONTACT_EMAIL', 'FINANCIAL_APPROVAL'] };
+    update.flush(saved);
+    await render();
+    expect(page.textContent).toContain('Perfil comercial salvo');
+
+    await harness.navigateByUrl('/esqueci-minha-senha');
+    await harness.navigateByUrl('/organizador');
+    http.expectOne(path + '/onboarding').flush([saved]);
+    await render();
+    expect(harness.routeNativeElement!.querySelector<HTMLInputElement>('#commercial-name')!.value).toBe('Agenda da Cidade');
+    expect(harness.routeNativeElement!.textContent).toContain('Informar o e-mail de contato');
+    expect(session.user()?.role).toBe('ROLE_CUSTOMER');
+    http.verify();
+  });
 });

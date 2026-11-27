@@ -10,6 +10,8 @@ import java.util.UUID;
 public record EventSummaryResponse(
         UUID id,
 
+        UUID organizationId,
+
         String title,
 
         String slug,

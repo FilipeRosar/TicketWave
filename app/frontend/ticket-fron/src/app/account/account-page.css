@@ -46,3 +46,6 @@ h1 { margin: 0 0 17px; font-size: clamp(1.35rem, 2.8vw, 1.8rem); font-weight: 80
   .explore { padding-inline: 7px; }
   .explore span { display: none; }
 }
+
+.organizer-link { display: block; margin-bottom: 12px; color: var(--dark-link, #28466e); font-size: .9rem; font-weight: 750; }
+.organizer-link:hover { text-decoration: underline; }

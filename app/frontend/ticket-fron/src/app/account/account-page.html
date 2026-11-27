@@ -23,6 +23,7 @@
           <dt>E-mail</dt>
           <dd>{{ user.email }}</dd>
         </dl>
+        <a class="organizer-link" routerLink="/organizador">Central do organizador</a>
         <button type="button" class="logout" [disabled]="busy()" (click)="logout()">
           {{ busy() ? 'Saindo…' : 'Sair da conta' }}
         </button>

@@ -1,6 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, inject, Injectable, signal } from '@angular/core';
 import { AuthApi } from '../api/auth-api';
+import { OrganizationApi } from '../api/organization-api';
+import type { CommercialProfile, CreateOrganization } from '../interfaces/organization';
 import { EventsApi } from '../api/events-api';
 import { ParticipantProfileApi } from '../api/participant-profile-api';
 import type { Profile, Registration, Tokens } from '../interfaces/auth';
@@ -9,6 +11,7 @@ import type { Profile, Registration, Tokens } from '../interfaces/auth';
 export class AuthSession {
   private readonly api = inject(AuthApi);
   private readonly events = inject(EventsApi);
+  private readonly organizations = inject(OrganizationApi);
   private readonly profiles = inject(ParticipantProfileApi);
   private readonly profile = signal<Profile | null>(null);
   private readonly notice = signal('');
@@ -40,6 +43,18 @@ export class AuthSession {
     this.profile.set(profile);
     this.notice.set('');
     this.setTokens(tokens);
+  }
+
+  listOrganizations() {
+    return this.organizations.list(this.accessToken());
+  }
+
+  createOrganization(request: CreateOrganization) {
+    return this.organizations.create(this.accessToken(), request);
+  }
+
+  saveCommercialProfile(id: string, profile: CommercialProfile) {
+    return this.organizations.save(this.accessToken(), id, profile);
   }
 
   listPublishedEvents(page: number) {

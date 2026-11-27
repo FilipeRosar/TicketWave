@@ -1,0 +1,98 @@
+<header class="organizer-header">
+  <nav class="shell" aria-label="Navegação">
+    <a routerLink="/conta">← Minha conta</a>
+    @if (session.user()) { <app-theme-toggle /> }
+  </nav>
+</header>
+
+<main class="shell workspace">
+  <h1>Central do organizador</h1>
+  @if (!session.user()) {
+    <section class="panel">
+      <p>Entre para cadastrar uma organização ou retomar seu progresso.</p>
+      <a class="primary" routerLink="/entrar">Entrar</a>
+    </section>
+  } @else {
+    @if (message()) { <p class="feedback" role="status">{{ message() }}</p> }
+    @if (error()) { <p class="feedback error" role="alert">{{ error() }}</p> }
+    @if (!loaded()) {
+      @if (error()) {
+        <button type="button" class="secondary" [disabled]="busy()" (click)="load()">Tentar novamente</button>
+      } @else {
+        <p role="status">Carregando organizações…</p>
+      }
+    } @else {
+      <div class="workspace-grid">
+        <aside class="panel organizations">
+          <h2>Suas organizações</h2>
+          @for (organization of organizations(); track organization.id) {
+            <button type="button" class="organization" [disabled]="busy()"
+              [attr.aria-pressed]="!creating() && selectedId() === organization.id" (click)="select(organization.id)">
+              <strong>{{ organization.commercialName || organization.name }}</strong>
+              <span>{{ organization.type === 'PF' ? 'Pessoa física' : 'Pessoa jurídica' }}</span>
+            </button>
+          }
+          <button type="button" class="secondary" [disabled]="busy()" (click)="startCreating()">Nova organização</button>
+        </aside>
+
+        <div class="workspace-body">
+          @if (creating()) {
+            <section class="panel">
+              <h2>Cadastrar organização</h2>
+              <form #registration (submit)="register($event, registration)">
+                <label for="organization-name">Nome cadastral</label>
+                <input id="organization-name" name="name" maxlength="150" required>
+                <label for="organization-type">Tipo</label>
+                <select #typeInput id="organization-type" [value]="type()"
+                  (change)="type.set(typeInput.value === 'PJ' ? 'PJ' : 'PF')">
+                  <option value="PF">Pessoa física (PF)</option>
+                  <option value="PJ">Pessoa jurídica (PJ)</option>
+                </select>
+                @if (type() === 'PJ') {
+                  <label for="organization-cnpj">CNPJ</label>
+                  <input id="organization-cnpj" name="document" maxlength="18" required>
+                } @else {
+                  <label for="organization-cpf">CPF (opcional)</label>
+                  <input id="organization-cpf" name="document" inputmode="numeric" maxlength="14">
+                }
+                <button class="primary" type="submit" [disabled]="busy()">Cadastrar organização</button>
+              </form>
+            </section>
+          } @else if (selected(); as organization) {
+            <section class="panel" aria-labelledby="steps-title">
+              <div class="panel-title">
+                <h2 id="steps-title">Pendências</h2>
+                <span class="status" [class.approved]="organization.financialStatus === 'APPROVED'">
+                  {{ organization.financialStatus === 'APPROVED' ? 'Habilitação aprovada' : 'Habilitação pendente' }}
+                </span>
+              </div>
+              @if (organization.pending.length) {
+                <ul>
+                  @for (step of organization.pending; track step) { <li>{{ pendingLabels[step] }}</li> }
+                </ul>
+              } @else {
+                <p>Cadastro concluído.</p>
+              }
+              @if (organization.financialStatus === 'PENDING') {
+                <p class="hint">Você pode salvar rascunhos de eventos enquanto aguarda. A publicação paga exige habilitação aprovada.</p>
+              }
+            </section>
+            <section class="panel">
+              <h2>Perfil comercial</h2>
+              <form #commercial (submit)="save($event, commercial, organization.id)">
+                <label for="commercial-name">Nome comercial</label>
+                <input id="commercial-name" name="commercialName" maxlength="150" [value]="organization.commercialName ?? ''">
+                <label for="commercial-email">E-mail de contato</label>
+                <input id="commercial-email" name="contactEmail" type="email" maxlength="255" [value]="organization.contactEmail ?? ''">
+                <label for="commercial-description">Descrição</label>
+                <textarea id="commercial-description" name="description" rows="4"
+                  maxlength="1000" [value]="organization.description ?? ''"></textarea>
+                <button class="primary" type="submit" [disabled]="busy()">Salvar perfil comercial</button>
+              </form>
+            </section>
+          }
+        </div>
+      </div>
+    }
+  }
+</main>

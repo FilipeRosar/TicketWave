@@ -43,7 +43,7 @@ docker compose down
 
 1. No Swagger, use `POST /v1/api/auth/register` para cadastrar um usuário. Informe nome, e-mail, telefone, data de nascimento (`birthDate`, no formato `AAAA-MM-DD`), CPF (`cpf`), senha e confirmação (`passwordConfirmation`). O CPF aceita 11 dígitos ou o formato com pontos e hífen. Envie o endereço em `address` com `zipCode`, `street`, `number`, `district`, `city`, `state` e, opcionalmente, `complement`. No formulário Angular, **Buscar CEP** consulta o ViaCEP e preenche os campos disponíveis. Preencha o número e confira o endereço antes de enviar.
 2. Use `POST /v1/api/auth/login` para obter `accessToken` e `refreshToken`. Informe o token de acesso no botão **Authorize** do Swagger ou envie `Authorization: Bearer <accessToken>` nas rotas protegidas.
-3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A gestão exige `ROLE_ORGANIZER` e se limita aos eventos da própria conta. O cadastro público atribui `ROLE_CUSTOMER` (participante).
+3. Consulte `GET /v1/api/event` para listar eventos ou `GET /v1/api/event/search` para buscar com filtros. A gestão de eventos exige vínculo ativo `OWNER` ou `ADMIN` na organização do evento. O cadastro público atribui `ROLE_CUSTOMER` (participante).
 
 ### Cadastro de organização
 
@@ -53,18 +53,26 @@ O cadastro retorna HTTP 201 com os dados da organização e o papel `OWNER` da c
 
 Documentos são criptografados e omitidos das respostas. Para cadastros com documento, gere uma chave com `openssl rand -base64 32` e configure `ORGANIZATION_DOCUMENT_KEY` no ambiente local ou no gerenciador de segredos da implantação. Guarde a mesma chave entre reinicializações.
 
+### Central do organizador
+
+No Angular, abra **Minha conta → Central do organizador** para cadastrar uma organização, retomar o perfil comercial e consultar pendências. A API lista organizações próprias em `GET /v1/api/organizations/onboarding` e salva o perfil comercial em `PUT /v1/api/organizations/{id}/commercial-profile`.
+
+Inclua `organizationId` ao criar um evento pela organização. A conta proprietária pode criar rascunhos e publicar eventos gratuitos antes da habilitação, preservando seu papel pessoal. Para publicar eventos pagos ou passar um evento publicado para um novo preço positivo, a organização precisa de habilitação aprovada. A aprovação não é editável pelo proprietário.
+
 ### Gestão de eventos
 
 | Operação | Rota |
 | --- | --- |
 | Criar rascunho | `POST /v1/api/event` |
-| Listar eventos da própria conta | `GET /v1/api/event/mine` |
+| Listar eventos das organizações que a conta gerencia | `GET /v1/api/event/mine` (filtro opcional `organizationId`) |
 | Editar rascunho ou evento publicado | `PUT /v1/api/event/{id}` |
 | Publicar rascunho | `PATCH /v1/api/event/{id}/publish` |
 | Cancelar rascunho ou evento publicado | `PATCH /v1/api/event/{id}/cancel` |
 | Excluir rascunho | `DELETE /v1/api/event/{id}` |
 
-A publicação exige data de início futura. O término deve ser posterior ao início e a capacidade deve comportar os ingressos comprometidos. O catálogo e a busca exibem somente eventos publicados. Rascunhos e eventos cancelados continuam disponíveis para o organizador responsável na listagem da própria conta.
+A publicação exige data de início futura. O término deve ser posterior ao início e a capacidade deve comportar os ingressos comprometidos. O catálogo e a busca exibem somente eventos publicados. Rascunhos e eventos cancelados ficam disponíveis para os membros autorizados na listagem de gestão.
+
+Na criação, informe `organizationId`. A migração V22 gera uma organização de legado por responsável de eventos que ainda não tinham vínculo, registra o mapeamento em `legacy_event_organization_map` e preserva os vínculos já definidos. Para responsáveis mapeados, requisições de criação sem `organizationId` usam a organização de legado. A migração preserva o autor, o responsável pela publicação e os registros associados aos eventos existentes.
 
 Nas rotas de criação e edição, use `classification` com `PROFESSIONAL` ou `SOCIAL`. O campo `eventType` mantém o formato presencial, online ou híbrido, e `categoryId` identifica a categoria do evento. Cadastros anteriores e requisições de criação sem classificação usam `SOCIAL`.
 

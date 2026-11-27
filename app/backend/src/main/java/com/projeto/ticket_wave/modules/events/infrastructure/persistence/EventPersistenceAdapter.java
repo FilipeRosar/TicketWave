@@ -20,6 +20,8 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
+import static com.projeto.ticket_wave.modules.organizations.domain.OrganizationMemberRole.EVENT_MANAGERS;
+
 @Repository
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -49,8 +51,8 @@ class EventPersistenceAdapter implements EventRepository {
     }
 
     @Override
-    public Page<Event> findByOrganizer(UUID organizerId, Pageable pageable) {
-        return repository.findByOrganizerId(organizerId, pageable).map(mapper::toDomain);
+    public Page<Event> findManageableByMember(UUID userId, UUID organizationId, Pageable pageable) {
+        return repository.findManageableByMember(userId, organizationId, EVENT_MANAGERS, pageable).map(mapper::toDomain);
     }
 
     @Override

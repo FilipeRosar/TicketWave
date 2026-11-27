@@ -16,7 +16,7 @@ public interface EventRepository {
 
     Page<Event> findPublished(Pageable pageable);
 
-    Page<Event> findByOrganizer(UUID organizerId, Pageable pageable);
+    Page<Event> findManageableByMember(UUID userId, UUID organizationId, Pageable pageable);
 
     Page<Event> searchPublished(EventSearchCriteria criteria, Pageable pageable);
 

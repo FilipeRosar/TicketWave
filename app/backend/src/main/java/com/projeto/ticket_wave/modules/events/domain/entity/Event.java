@@ -14,6 +14,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -69,6 +70,8 @@ public class Event extends BaseEntity {
 
     private User organizer;
 
+    private UUID organizationId;
+
     private Venue venue;
 
     private Integer totalViews;
@@ -99,7 +102,7 @@ public class Event extends BaseEntity {
         }
     }
 
-    public void publish(LocalDateTime now) {
+    public void publish(LocalDateTime now, User publisher) {
         if (eventStatus != EventStatus.DRAFT) {
             throw new ConflictException("Somente rascunhos podem ser publicados.");
         }
@@ -109,7 +112,7 @@ public class Event extends BaseEntity {
         }
         eventStatus = EventStatus.PUBLISHED;
         published = true;
-        publishedBy = organizer;
+        publishedBy = publisher;
     }
 
     public void cancel() {
@@ -145,8 +148,8 @@ public class Event extends BaseEntity {
         }
     }
     public void validatePrice(){
-        if(ticketPrice.compareTo(BigDecimal.ZERO) <= 0){
-            throw new BusinessException("Price cannot be less than 0");
+        if(ticketPrice.signum() < 0){
+            throw new BusinessException("O preço não pode ser negativo.");
         }
     }
 

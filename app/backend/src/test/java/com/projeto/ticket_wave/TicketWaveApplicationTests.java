@@ -125,9 +125,43 @@ class TicketWaveApplicationTests {
                         .target("19")
                         .load()
                         .migrate();
+                Flyway.configure()
+                        .configuration(flyway.getConfiguration())
+                        .locations("classpath:db/migration", "classpath:db/test/event-organization-upgrade")
+                        .target("21")
+                        .load()
+                        .migrate();
                 flyway.migrate();
             };
         }
+    }
+
+    @Test
+    void migratesLegacyEventsWithoutChangingExistingLinksOrHistory() {
+        UUID ownerId = UUID.fromString("12f38108-8030-48db-9fd0-6356b39d9e76");
+        UUID legacyOrganization = organizations.findLegacyOrganizationId(ownerId).orElseThrow();
+        UUID publishedId = UUID.fromString("15cbebc4-799a-4379-86b5-3b3505ddef25");
+
+        Event published = events.findById(publishedId).orElseThrow();
+        assertThat(published.getOrganizationId()).isEqualTo(legacyOrganization);
+        assertThat(published.getOrganizer().getId()).isEqualTo(ownerId);
+        assertThat(published.getPublishedBy().getId()).isEqualTo(UUID.fromString("3d8a0edf-c46e-4ddb-9daf-29793262d703"));
+        assertThat(published.getEventStatus()).isEqualTo(EventStatus.PUBLISHED);
+        assertThat(published.getVersion()).isEqualTo(5L);
+        assertThat(published.getTotalTicketsSold()).isEqualTo(3);
+        assertThat(published.getSlug()).isEqualTo("evento-legado-publicado");
+
+        Event cancelled = events.findById(UUID.fromString("34db9e7d-5afd-41c1-a3eb-7acc435d24dd")).orElseThrow();
+        assertThat(cancelled.getOrganizationId()).isEqualTo(legacyOrganization);
+        assertThat(cancelled.getEventStatus()).isEqualTo(EventStatus.CANCELLED);
+
+        Event linked = events.findById(UUID.fromString("4223c4a2-979d-410e-bd43-a8a1c885376a")).orElseThrow();
+        assertThat(linked.getOrganizationId()).isEqualTo(UUID.fromString("1d17c10a-99fe-45e6-a277-2bb544e88650"));
+        assertThat(organizationMembers.existsByOrganizationIdAndUserIdAndRoleAndStatus(
+                legacyOrganization, ownerId, OrganizationMemberRole.OWNER, OrganizationStatus.ACTIVE)).isTrue();
+        assertThat(entityManager.createQuery("SELECT batch.event.id FROM TicketBatch batch WHERE batch.id = :id", UUID.class)
+                .setParameter("id", UUID.fromString("2645580a-2da6-405a-90a2-fa1f35b6c369"))
+                .getSingleResult()).isEqualTo(publishedId);
     }
 
     @Test
@@ -140,6 +174,8 @@ class TicketWaveApplicationTests {
         user.setPhone("11987654321");
         user.setRole(Role.ROLE_ORGANIZER);
         User organizer = users.save(user);
+        UUID organizationId = organizations.saveAndFlush(
+                new OrganizationJpaEntity("Organização para eventos", OrganizationType.PF, null)).getId();
 
         CategoryJpaEntity categoryEntity = new CategoryJpaEntity();
         categoryEntity.setName("Tecnologia");
@@ -182,6 +218,7 @@ class TicketWaveApplicationTests {
                 .category(category)
                 .venue(venue)
                 .organizer(organizer)
+                .organizationId(organizationId)
                 .build());
 
         assertThat(event.getId()).isNotNull();

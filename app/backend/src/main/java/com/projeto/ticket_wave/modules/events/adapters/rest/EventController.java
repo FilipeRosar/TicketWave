@@ -40,8 +40,8 @@ public class EventController {
         return ResponseEntity.ok(eventService.searchPublished(search, pageable));
     }
     @GetMapping("/mine")
-    public Page<EventSummaryResponse> myEvents(Pageable pageable) {
-        return eventService.findMyEvents(pageable);
+    public Page<EventSummaryResponse> myEvents(@RequestParam(required = false) UUID organizationId, Pageable pageable) {
+        return eventService.findMyEvents(organizationId, pageable);
     }
 
     @PatchMapping("/{id}/publish")

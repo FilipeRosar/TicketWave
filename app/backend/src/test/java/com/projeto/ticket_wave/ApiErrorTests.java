@@ -13,7 +13,10 @@ import com.projeto.ticket_wave.modules.identity.domain.enums.Role;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.CustomUserDetails;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.JwtService;
 import com.projeto.ticket_wave.modules.identity.infrastructure.security.GoogleIdentityVerifier;
+import com.projeto.ticket_wave.modules.organizations.domain.OrganizationFinancialStatus;
 import com.projeto.ticket_wave.modules.organizations.domain.OrganizationMemberRole;
+import com.projeto.ticket_wave.modules.organizations.domain.OrganizationType;
+import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationJpaEntity;
 import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationJpaRepository;
 import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationMemberJpaEntity;
 import com.projeto.ticket_wave.modules.organizations.infrastructure.persistence.OrganizationMemberJpaRepository;
@@ -295,23 +298,9 @@ class ApiErrorTests {
                 .contentType(MediaType.APPLICATION_JSON).content(event.replace("\"capacity\": 100", "\"capacity\": 0"))),
                 400, eventPath).andExpect(jsonPath("$.violations[0].field").value("capacity"));
 
-        CategoryJpaEntity category = new CategoryJpaEntity();
-        category.setName("Autorização");
-        category.setSlug("autorizacao");
-        AddressJpaEntity address = new AddressJpaEntity();
-        address.setStreet("Rua de teste");
-        address.setNumber("1");
-        address.setDistrict("Centro");
-        address.setCity("São Paulo");
-        address.setState("SP");
-        address.setZipCode("01000-000");
-        VenueJpaEntity venue = new VenueJpaEntity();
-        venue.setName("Auditório de teste");
-        venue.setSlug("auditorio-de-teste");
-        venue.setCapacity(100);
-        venue.setAddress(address);
-        String validEvent = event.replace("00000000-0000-0000-0000-000000000001", categories.save(category).getId().toString())
-                .replace("00000000-0000-0000-0000-000000000002", venues.save(venue).getId().toString());
+        UUID organizationId = organizationFor(organizer.getId(), "Organização do CRUD");
+        String validEvent = json.readValue(eventWithReferences(event, ""), ObjectNode.class)
+                .put("organizationId", organizationId.toString()).toString();
         expectError(mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(validEvent.replace("2099-01-01T11:00:00", "2099-01-01T09:00:00"))), 400, eventPath);
@@ -333,8 +322,7 @@ class ApiErrorTests {
         expectError(mvc.perform(get(minePath).header(HttpHeaders.AUTHORIZATION, participantToken)), 403, minePath);
         mvc.perform(get(minePath).header(HttpHeaders.AUTHORIZATION, organizerToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(id));
-        mvc.perform(get(minePath).header(HttpHeaders.AUTHORIZATION, otherOrganizerToken))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.content").isEmpty());
+        expectError(mvc.perform(get(minePath).header(HttpHeaders.AUTHORIZATION, otherOrganizerToken)), 403, minePath);
         mvc.perform(get(searchPath).header(HttpHeaders.AUTHORIZATION, participantToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content").isEmpty());
 
@@ -366,7 +354,7 @@ class ApiErrorTests {
                         """)), 400, itemPath);
         mvc.perform(put(itemPath).header(HttpHeaders.AUTHORIZATION, organizerToken)
                 .contentType(MediaType.APPLICATION_JSON).content("""
-                        {"title":"Evento atualizado","startDate":"2099-01-01T10:00:00","capacity":60}
+                        {"title":"Evento atualizado","startDate":"2099-01-01T10:00:00","capacity":60,"ticketPrice":0}
                         """))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Evento atualizado"))
                 .andExpect(jsonPath("$.availableTickets").value(40));
@@ -777,6 +765,176 @@ class ApiErrorTests {
         verify(organizationMembers).saveAndFlush(any(OrganizationMemberJpaEntity.class));
         assertThat(organizations.count()).isEqualTo(organizationCount);
         assertThat(organizationMembers.count()).isEqualTo(membershipCount);
+    }
+
+    @Test
+    @Transactional
+    void organizerOnboardingResumesAndRequiresApprovalOnlyForPaidPublication() throws Exception {
+        String organizationsPath = "/v1/api/organizations";
+        String onboarding = organizationsPath + "/onboarding";
+        String eventPath = "/v1/api/event";
+        String ownerEmail = "onboarding-owner@example.test";
+        String owner = bearerFor(ownerEmail, "11999998411", Role.ROLE_CUSTOMER);
+        String outsider = bearerFor("onboarding-outsider@example.test", "11999998412", Role.ROLE_CUSTOMER);
+        expectError(mvc.perform(get(onboarding)), 401, onboarding);
+        mvc.perform(get(onboarding).header(HttpHeaders.AUTHORIZATION, owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+
+        String body = mvc.perform(post(organizationsPath).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"name":"Organização de teste","type":"PF"}
+                        """)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
+        String organizationId = json.readTree(body).get("id").asText();
+        String profilePath = organizationsPath + "/" + organizationId + "/commercial-profile";
+        expectError(mvc.perform(put(profilePath).header(HttpHeaders.AUTHORIZATION, outsider)
+                .contentType(MediaType.APPLICATION_JSON).content("{}")), 403, profilePath);
+        expectError(mvc.perform(put(profilePath).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"contactEmail":"inválido"}
+                        """)), 400, profilePath);
+        mvc.perform(put(profilePath).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"commercialName":"  Organiza Eventos  ","financialStatus":"APPROVED"}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.commercialName").value("Organiza Eventos"))
+                .andExpect(jsonPath("$.financialStatus").value("PENDING"))
+                .andExpect(jsonPath("$.pending[0]").value("CONTACT_EMAIL"))
+                .andExpect(jsonPath("$.pending[1]").value("FINANCIAL_APPROVAL"));
+        entityManager.flush();
+        entityManager.clear();
+        mvc.perform(get(onboarding).header(HttpHeaders.AUTHORIZATION, owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$[0].commercialName").value("Organiza Eventos"))
+                .andExpect(jsonPath("$[0].document").doesNotExist());
+        mvc.perform(get(onboarding).header(HttpHeaders.AUTHORIZATION, outsider))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.length()").value(0));
+        assertThat(users.findByEmail(ownerEmail).orElseThrow().getRole()).isEqualTo(Role.ROLE_CUSTOMER);
+
+        ObjectNode event = json.readValue(eventWithReferences("""
+                {"title":"Rascunho pago","shortDescription":"Resumo","description":"Descrição",
+                 "startDate":"2099-01-01T10:00:00","endDate":"2099-01-01T11:00:00",
+                 "capacity":50,"ticketPrice":25,"eventType":"PRESENTIAL",
+                 "categoryId":"00000000-0000-0000-0000-000000000001",
+                 "venueId":"00000000-0000-0000-0000-000000000002"}
+                """, "-onboarding"), ObjectNode.class).put("organizationId", organizationId);
+        expectError(mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, outsider)
+                .contentType(MediaType.APPLICATION_JSON).content(event.toString())), 403, eventPath);
+        String paidBody = mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content(event.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eventStatus").value("DRAFT"))
+                .andExpect(jsonPath("$.organizationId").value(organizationId))
+                .andReturn().getResponse().getContentAsString();
+        String paidPath = eventPath + "/" + json.readTree(paidBody).get("id").asText();
+        String publishPaidPath = paidPath + "/publish";
+        expectError(mvc.perform(patch(publishPaidPath).header(HttpHeaders.AUTHORIZATION, outsider)),
+                403, publishPaidPath);
+        expectError(mvc.perform(patch(publishPaidPath).header(HttpHeaders.AUTHORIZATION, owner)),
+                409, publishPaidPath);
+        mvc.perform(get(eventPath + "/mine").header(HttpHeaders.AUTHORIZATION, owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].status").value("DRAFT"));
+
+        String freeBody = mvc.perform(post(eventPath).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(event.deepCopy().put("title", "Evento gratuito").put("ticketPrice", 0).toString()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        String freePath = eventPath + "/" + json.readTree(freeBody).get("id").asText();
+        mvc.perform(patch(freePath + "/publish").header(HttpHeaders.AUTHORIZATION, owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.published").value(true));
+        expectError(mvc.perform(put(freePath).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"ticketPrice":15}
+                        """)), 409, freePath);
+
+        entityManager.createQuery("""
+                UPDATE OrganizationJpaEntity SET financialStatus = :status WHERE id = :id
+                """).setParameter("status", OrganizationFinancialStatus.APPROVED)
+                .setParameter("id", UUID.fromString(organizationId)).executeUpdate();
+        entityManager.clear();
+        mvc.perform(patch(publishPaidPath).header(HttpHeaders.AUTHORIZATION, owner))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.published").value(true));
+    }
+
+    @Test
+    @Transactional
+    void organizationAdminManagesEventWhileOtherMembershipsAndOrganizationsRemainIsolated() throws Exception {
+        String path = "/v1/api/event";
+        String owner = bearerFor("org-event-owner@example.test", "11999998421", Role.ROLE_CUSTOMER);
+        String admin = bearerFor("org-event-admin@example.test", "11999998422", Role.ROLE_CUSTOMER);
+        String finance = bearerFor("org-event-finance@example.test", "11999998423", Role.ROLE_CUSTOMER);
+        UUID ownerId = users.findByEmail("org-event-owner@example.test").orElseThrow().getId();
+        UUID adminId = users.findByEmail("org-event-admin@example.test").orElseThrow().getId();
+        UUID financeId = users.findByEmail("org-event-finance@example.test").orElseThrow().getId();
+        UUID organizationId = organizationFor(ownerId, "Organização A");
+        UUID otherOrganizationId = organizationFor(ownerId, "Organização B");
+        organizationMembers.saveAndFlush(new OrganizationMemberJpaEntity(organizationId, adminId, OrganizationMemberRole.ADMIN));
+        organizationMembers.saveAndFlush(new OrganizationMemberJpaEntity(organizationId, financeId, OrganizationMemberRole.FINANCEIRO));
+
+        ObjectNode event = json.readValue(eventWithReferences("""
+                {"title":"Evento da equipe","shortDescription":"Resumo","description":"Descrição",
+                 "startDate":"2099-01-01T10:00:00","endDate":"2099-01-01T11:00:00",
+                 "capacity":20,"ticketPrice":0,"eventType":"PRESENTIAL",
+                 "categoryId":"00000000-0000-0000-0000-000000000001",
+                 "venueId":"00000000-0000-0000-0000-000000000002"}
+                """, "-org-team"), ObjectNode.class);
+        expectError(mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content(event.toString())), 400, path);
+        String created = mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, owner)
+                .contentType(MediaType.APPLICATION_JSON).content(event.put("organizationId", organizationId.toString()).toString()))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        UUID eventId = UUID.fromString(json.readTree(created).get("id").asText());
+        String item = path + "/" + eventId;
+        mvc.perform(get(path + "/mine").header(HttpHeaders.AUTHORIZATION, admin)
+                .param("organizationId", organizationId.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(eventId.toString()));
+        expectError(mvc.perform(get(path + "/mine").header(HttpHeaders.AUTHORIZATION, admin)
+                .param("organizationId", otherOrganizationId.toString())), 403, path + "/mine");
+        expectError(mvc.perform(get(item).header(HttpHeaders.AUTHORIZATION, finance)), 404, item);
+        expectError(mvc.perform(put(item).header(HttpHeaders.AUTHORIZATION, finance)
+                .contentType(MediaType.APPLICATION_JSON).content("{}")), 403, item);
+        expectError(mvc.perform(post(path).header(HttpHeaders.AUTHORIZATION, admin).contentType(MediaType.APPLICATION_JSON)
+                .content(event.deepCopy().put("organizationId", otherOrganizationId.toString()).toString())), 403, path);
+
+        mvc.perform(put(item).header(HttpHeaders.AUTHORIZATION, admin)
+                .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"title":"Editado pela equipe"}
+                        """))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Editado pela equipe"))
+                .andExpect(jsonPath("$.organizationId").value(organizationId.toString()));
+        mvc.perform(patch(item + "/publish").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.published").value(true));
+
+        assertThat(entityManager.createQuery("SELECT e.publishedBy.id FROM Event e WHERE e.id = :id", UUID.class)
+                .setParameter("id", eventId).getSingleResult()).isEqualTo(adminId);
+        assertThat(entityManager.createQuery("SELECT e.organizer.id FROM Event e WHERE e.id = :id", UUID.class)
+                .setParameter("id", eventId).getSingleResult()).isEqualTo(ownerId);
+        mvc.perform(patch(item + "/cancel").header(HttpHeaders.AUTHORIZATION, admin))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eventStatus").value("CANCELLED"));
+    }
+
+    private UUID organizationFor(UUID ownerId, String name) {
+        UUID id = organizations.saveAndFlush(new OrganizationJpaEntity(name, OrganizationType.PF, null)).getId();
+        organizationMembers.saveAndFlush(new OrganizationMemberJpaEntity(id, ownerId, OrganizationMemberRole.OWNER));
+        return id;
+    }
+
+    private String eventWithReferences(String event, String suffix) {
+        CategoryJpaEntity category = new CategoryJpaEntity();
+        category.setName("Autorização" + suffix);
+        category.setSlug("autorizacao" + suffix);
+        AddressJpaEntity address = new AddressJpaEntity();
+        address.setStreet("Rua de teste");
+        address.setNumber("1");
+        address.setDistrict("Centro");
+        address.setCity("São Paulo");
+        address.setState("SP");
+        address.setZipCode("01000-000");
+        VenueJpaEntity venue = new VenueJpaEntity();
+        venue.setName("Auditório de teste");
+        venue.setSlug("auditorio-de-teste" + suffix);
+        venue.setCapacity(100);
+        venue.setAddress(address);
+        return event.replace("00000000-0000-0000-0000-000000000001", categories.save(category).getId().toString())
+                .replace("00000000-0000-0000-0000-000000000002", venues.save(venue).getId().toString());
     }
 
     private String bearerFor(String email, String phone, Role role) {
